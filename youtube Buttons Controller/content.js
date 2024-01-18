@@ -1,4 +1,4 @@
-// Content script
+
 function clickNextButton() {
   let nextButton = document.querySelector('.ytp-next-button');
   if (nextButton) {
@@ -21,12 +21,12 @@ function clickMuteButton() {
   if (muteButton) {
     muteButton.click();
     mute_button_title = muteButton['title'];
-    // Send a message to popup.js
+    
     browser.runtime.sendMessage({ action: mute_button_title });
   }
 }
 
-// Example: Listen for messages from the background script
+
 browser.runtime.onMessage.addListener((message) => {
   if (message.command === 'clickNextButton') {
     clickNextButton();
