@@ -32,12 +32,7 @@
   ],
   "browser_action": {
     "default_popup": "popup.html",
-    "default_icon": {
-      "16": "images/youtube.png",
-      "32": "images/youtube.png",
-      "48": "images/youtube.png",
-      "128": "images/youtube.png"
-    }
+    "default_icon": "images/youtube.png"
   },
   "commands": {
     "play-pause": {

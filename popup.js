@@ -792,72 +792,167 @@ class PopupController {
     const modal = document.createElement('div');
     modal.id = 'settingsModal';
     modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>⚙️ Settings</h3>
-            <button class="close-btn" id="modal-close-btn">×</button>
-          </div>
-          <div class="modal-body">
-            <div class="setting-item">
-              <label>
-                <input type="checkbox" id="autoDetectSetting" ${this.settings.autoDetect ? 'checked' : ''}>
-                🔍 Auto-detect YouTube tabs
-              </label>
-              <p class="setting-desc">Automatically find and connect to YouTube video tabs</p>
-            </div>
-            
-            <div class="setting-item">
-              <label>
-                <input type="checkbox" id="autoPauseSetting" ${this.settings.autoPause ? 'checked' : ''}>
-                ⏸️ Auto-pause on tab switch
-              </label>
-              <p class="setting-desc">Pause videos when switching to other tabs</p>
-            </div>
-            
-            <div class="setting-item">
-              <label>
-                <input type="checkbox" id="darkModeSetting" ${this.settings.darkMode ? 'checked' : ''}>
-                🌙 Dark mode
-              </label>
-              <p class="setting-desc">Use dark theme for the extension popup</p>
-            </div>
-            
-            <div class="setting-item">
-              <label for="volumeStepSetting">🔊 Volume step</label>
-              <select id="volumeStepSetting">
-                <option value="5">5%</option>
-                <option value="10" selected>10%</option>
-                <option value="15">15%</option>
-                <option value="20">20%</option>
-              </select>
-              <p class="setting-desc">Volume change amount for +/- buttons</p>
-            </div>
-            
-            <div class="setting-item">
-              <label for="updateIntervalSetting">⏱️ Update interval</label>
-              <select id="updateIntervalSetting">
-                <option value="500">0.5 seconds</option>
-                <option value="1000" selected>1 second</option>
-                <option value="2000">2 seconds</option>
-                <option value="3000">3 seconds</option>
-              </select>
-              <p class="setting-desc">How often to update video information</p>
-            </div>
-            
-            <div class="setting-item">
-              <button class="btn primary" id="shortcuts-btn" style="width: 100%; margin-top: 10px;">
-                ⌨️ View Keyboard Shortcuts
-              </button>
-              <p class="setting-desc">View all available keyboard shortcuts and how to customize them</p>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn primary" id="modal-save-btn">Save Changes</button>
-            <button class="btn secondary" id="modal-cancel-btn">Cancel</button>
-          </div>
-        </div>
-    `;
+    
+    // Create modal structure using DOM methods
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    
+    // Header
+    const modalHeader = document.createElement('div');
+    modalHeader.className = 'modal-header';
+    
+    const headerTitle = document.createElement('h3');
+    headerTitle.textContent = '⚙️ Settings';
+    
+    const modalCloseBtn = document.createElement('button');
+    modalCloseBtn.className = 'close-btn';
+    modalCloseBtn.id = 'modal-close-btn';
+    modalCloseBtn.textContent = '×';
+    
+    modalHeader.appendChild(headerTitle);
+    modalHeader.appendChild(modalCloseBtn);
+    
+    // Body
+    const modalBody = document.createElement('div');
+    modalBody.className = 'modal-body';
+    
+    // Auto-detect setting
+    const autoDetectDiv = document.createElement('div');
+    autoDetectDiv.className = 'setting-item';
+    const autoDetectLabel = document.createElement('label');
+    const autoDetectInput = document.createElement('input');
+    autoDetectInput.type = 'checkbox';
+    autoDetectInput.id = 'autoDetectSetting';
+    autoDetectInput.checked = this.settings.autoDetect;
+    autoDetectLabel.appendChild(autoDetectInput);
+    autoDetectLabel.appendChild(document.createTextNode(' 🔍 Auto-detect YouTube tabs'));
+    const autoDetectDesc = document.createElement('p');
+    autoDetectDesc.className = 'setting-desc';
+    autoDetectDesc.textContent = 'Automatically find and connect to YouTube video tabs';
+    autoDetectDiv.appendChild(autoDetectLabel);
+    autoDetectDiv.appendChild(autoDetectDesc);
+    
+    // Auto-pause setting
+    const autoPauseDiv = document.createElement('div');
+    autoPauseDiv.className = 'setting-item';
+    const autoPauseLabel = document.createElement('label');
+    const autoPauseInput = document.createElement('input');
+    autoPauseInput.type = 'checkbox';
+    autoPauseInput.id = 'autoPauseSetting';
+    autoPauseInput.checked = this.settings.autoPause;
+    autoPauseLabel.appendChild(autoPauseInput);
+    autoPauseLabel.appendChild(document.createTextNode(' ⏸️ Auto-pause on tab switch'));
+    const autoPauseDesc = document.createElement('p');
+    autoPauseDesc.className = 'setting-desc';
+    autoPauseDesc.textContent = 'Pause videos when switching to other tabs';
+    autoPauseDiv.appendChild(autoPauseLabel);
+    autoPauseDiv.appendChild(autoPauseDesc);
+    
+    // Dark mode setting
+    const darkModeDiv = document.createElement('div');
+    darkModeDiv.className = 'setting-item';
+    const darkModeLabel = document.createElement('label');
+    const darkModeInput = document.createElement('input');
+    darkModeInput.type = 'checkbox';
+    darkModeInput.id = 'darkModeSetting';
+    darkModeInput.checked = this.settings.darkMode;
+    darkModeLabel.appendChild(darkModeInput);
+    darkModeLabel.appendChild(document.createTextNode(' 🌙 Dark mode'));
+    const darkModeDesc = document.createElement('p');
+    darkModeDesc.className = 'setting-desc';
+    darkModeDesc.textContent = 'Use dark theme for the extension popup';
+    darkModeDiv.appendChild(darkModeLabel);
+    darkModeDiv.appendChild(darkModeDesc);
+    
+    // Volume step setting
+    const volumeDiv = document.createElement('div');
+    volumeDiv.className = 'setting-item';
+    const volumeLabel = document.createElement('label');
+    volumeLabel.textContent = '🔊 Volume step';
+    volumeLabel.setAttribute('for', 'volumeStepSetting');
+    const volumeSelect = document.createElement('select');
+    volumeSelect.id = 'volumeStepSetting';
+    ['5', '10', '15', '20'].forEach(value => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value + '%';
+      if (value === '10') option.selected = true;
+      volumeSelect.appendChild(option);
+    });
+    const volumeDesc = document.createElement('p');
+    volumeDesc.className = 'setting-desc';
+    volumeDesc.textContent = 'Volume change amount for +/- buttons';
+    volumeDiv.appendChild(volumeLabel);
+    volumeDiv.appendChild(volumeSelect);
+    volumeDiv.appendChild(volumeDesc);
+    
+    // Update interval setting
+    const intervalDiv = document.createElement('div');
+    intervalDiv.className = 'setting-item';
+    const intervalLabel = document.createElement('label');
+    intervalLabel.textContent = '⏱️ Update interval';
+    intervalLabel.setAttribute('for', 'updateIntervalSetting');
+    const intervalSelect = document.createElement('select');
+    intervalSelect.id = 'updateIntervalSetting';
+    [['500', '0.5 seconds'], ['1000', '1 second'], ['2000', '2 seconds'], ['3000', '3 seconds']].forEach(([value, text]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      if (value === '1000') option.selected = true;
+      intervalSelect.appendChild(option);
+    });
+    const intervalDesc = document.createElement('p');
+    intervalDesc.className = 'setting-desc';
+    intervalDesc.textContent = 'How often to update video information';
+    intervalDiv.appendChild(intervalLabel);
+    intervalDiv.appendChild(intervalSelect);
+    intervalDiv.appendChild(intervalDesc);
+    
+    // Shortcuts button
+    const shortcutsDiv = document.createElement('div');
+    shortcutsDiv.className = 'setting-item';
+    const modalShortcutsBtn = document.createElement('button');
+    modalShortcutsBtn.className = 'btn primary';
+    modalShortcutsBtn.id = 'shortcuts-btn';
+    modalShortcutsBtn.style.width = '100%';
+    modalShortcutsBtn.style.marginTop = '10px';
+    modalShortcutsBtn.textContent = '⌨️ View Keyboard Shortcuts';
+    const shortcutsDesc = document.createElement('p');
+    shortcutsDesc.className = 'setting-desc';
+    shortcutsDesc.textContent = 'View all available keyboard shortcuts and how to customize them';
+    shortcutsDiv.appendChild(modalShortcutsBtn);
+    shortcutsDiv.appendChild(shortcutsDesc);
+    
+    // Append all settings to modal body
+    modalBody.appendChild(autoDetectDiv);
+    modalBody.appendChild(autoPauseDiv);
+    modalBody.appendChild(darkModeDiv);
+    modalBody.appendChild(volumeDiv);
+    modalBody.appendChild(intervalDiv);
+    modalBody.appendChild(shortcutsDiv);
+    
+    // Footer
+    const modalFooter = document.createElement('div');
+    modalFooter.className = 'modal-footer';
+    
+    const modalSaveBtn = document.createElement('button');
+    modalSaveBtn.className = 'btn primary';
+    modalSaveBtn.id = 'modal-save-btn';
+    modalSaveBtn.textContent = 'Save Changes';
+    
+    const modalCancelBtn = document.createElement('button');
+    modalCancelBtn.className = 'btn secondary';
+    modalCancelBtn.id = 'modal-cancel-btn';
+    modalCancelBtn.textContent = 'Cancel';
+    
+    modalFooter.appendChild(modalSaveBtn);
+    modalFooter.appendChild(modalCancelBtn);
+    
+    // Assemble modal
+    modalContent.appendChild(modalHeader);
+    modalContent.appendChild(modalBody);
+    modalContent.appendChild(modalFooter);
+    modal.appendChild(modalContent);
 
     document.body.appendChild(modal);
     
@@ -1016,33 +1111,112 @@ class PopupController {
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-content" style="max-width: 380px;">
-        <div class="modal-header">
-          <h3>⌨️ Keyboard Shortcuts</h3>
-          <button class="close-btn" id="close-shortcuts-modal">&times;</button>
-        </div>
-        <div class="modal-body" style="max-height: 350px; overflow-y: auto;">
-          <p style="margin-bottom: 20px; color: #aaa; font-size: 14px;">
-            These keyboard shortcuts work when you're on a YouTube page with this extension active.
-          </p>
-          ${shortcutsHTML}
-          <div style="margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; border-left: 4px solid #6495ed;">
-            <h4 style="margin: 0 0 10px 0; color: #6495ed;">💡 Customizing Shortcuts</h4>
-            <p style="margin: 0; font-size: 14px; color: #ccc;">
-              To customize these shortcuts in Firefox:
-              <br>1. Go to <strong>about:addons</strong>
-              <br>2. Click on this extension
-              <br>3. Go to "Preferences" or "Options"
-              <br>4. Look for "Manage Extension Shortcuts"
-            </p>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn secondary" id="close-shortcuts-btn">Close</button>
-        </div>
-      </div>
-    `;
+    
+    // Create modal structure using DOM methods
+    const shortcutsModalContent = document.createElement('div');
+    shortcutsModalContent.className = 'modal-content';
+    shortcutsModalContent.style.maxWidth = '380px';
+    
+    // Header
+    const shortcutsModalHeader = document.createElement('div');
+    shortcutsModalHeader.className = 'modal-header';
+    
+    const shortcutsTitle = document.createElement('h3');
+    shortcutsTitle.textContent = '⌨️ Keyboard Shortcuts';
+    
+    const shortcutsCloseBtn = document.createElement('button');
+    shortcutsCloseBtn.className = 'close-btn';
+    shortcutsCloseBtn.id = 'close-shortcuts-modal';
+    shortcutsCloseBtn.innerHTML = '&times;';
+    
+    shortcutsModalHeader.appendChild(shortcutsTitle);
+    shortcutsModalHeader.appendChild(shortcutsCloseBtn);
+    
+    // Body
+    const shortcutsModalBody = document.createElement('div');
+    shortcutsModalBody.className = 'modal-body';
+    shortcutsModalBody.style.maxHeight = '350px';
+    shortcutsModalBody.style.overflowY = 'auto';
+    
+    // Description
+    const shortcutsDesc = document.createElement('p');
+    shortcutsDesc.style.marginBottom = '20px';
+    shortcutsDesc.style.color = '#aaa';
+    shortcutsDesc.style.fontSize = '14px';
+    shortcutsDesc.textContent = 'These keyboard shortcuts work when you\'re on a YouTube page with this extension active.';
+    shortcutsModalBody.appendChild(shortcutsDesc);
+    
+    // Create shortcuts list
+    shortcuts.forEach(shortcut => {
+      const shortcutDiv = document.createElement('div');
+      shortcutDiv.style.display = 'flex';
+      shortcutDiv.style.justifyContent = 'space-between';
+      shortcutDiv.style.alignItems = 'center';
+      shortcutDiv.style.padding = '8px 0';
+      shortcutDiv.style.borderBottom = '1px solid #333';
+      
+      const leftDiv = document.createElement('div');
+      const keyStrong = document.createElement('strong');
+      keyStrong.style.color = '#6495ed';
+      keyStrong.textContent = shortcut.key;
+      
+      const descDiv = document.createElement('div');
+      descDiv.style.fontSize = '12px';
+      descDiv.style.color = '#aaa';
+      descDiv.style.marginTop = '2px';
+      descDiv.textContent = shortcut.description;
+      
+      leftDiv.appendChild(keyStrong);
+      leftDiv.appendChild(descDiv);
+      
+      const rightDiv = document.createElement('div');
+      rightDiv.style.fontWeight = '500';
+      rightDiv.textContent = shortcut.action;
+      
+      shortcutDiv.appendChild(leftDiv);
+      shortcutDiv.appendChild(rightDiv);
+      shortcutsModalBody.appendChild(shortcutDiv);
+    });
+    
+    // Tips section
+    const tipsDiv = document.createElement('div');
+    tipsDiv.style.marginTop = '20px';
+    tipsDiv.style.padding = '15px';
+    tipsDiv.style.background = '#2a2a2a';
+    tipsDiv.style.borderRadius = '8px';
+    tipsDiv.style.borderLeft = '4px solid #6495ed';
+    
+    const tipsTitle = document.createElement('h4');
+    tipsTitle.style.margin = '0 0 10px 0';
+    tipsTitle.style.color = '#6495ed';
+    tipsTitle.textContent = '💡 Customizing Shortcuts';
+    
+    const tipsText = document.createElement('p');
+    tipsText.style.margin = '0';
+    tipsText.style.fontSize = '14px';
+    tipsText.style.color = '#ccc';
+    tipsText.innerHTML = 'To customize these shortcuts in Firefox:<br>1. Go to <strong>about:addons</strong><br>2. Click on this extension<br>3. Go to "Preferences" or "Options"<br>4. Look for "Manage Extension Shortcuts"';
+    
+    tipsDiv.appendChild(tipsTitle);
+    tipsDiv.appendChild(tipsText);
+    shortcutsModalBody.appendChild(tipsDiv);
+    
+    // Footer
+    const shortcutsModalFooter = document.createElement('div');
+    shortcutsModalFooter.className = 'modal-footer';
+    
+    const shortcutsCloseFooterBtn = document.createElement('button');
+    shortcutsCloseFooterBtn.className = 'btn secondary';
+    shortcutsCloseFooterBtn.id = 'close-shortcuts-btn';
+    shortcutsCloseFooterBtn.textContent = 'Close';
+    
+    shortcutsModalFooter.appendChild(shortcutsCloseFooterBtn);
+    
+    // Assemble shortcuts modal
+    shortcutsModalContent.appendChild(shortcutsModalHeader);
+    shortcutsModalContent.appendChild(shortcutsModalBody);
+    shortcutsModalContent.appendChild(shortcutsModalFooter);
+    modal.appendChild(shortcutsModalContent);
 
     document.body.appendChild(modal);
 
