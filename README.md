@@ -41,7 +41,11 @@ A powerful Firefox extension for advanced YouTube video control with keyboard sh
 
 ## 📦 Installation
 
-### For Firefox Users
+### Option 1: Install from Firefox Add-ons Store (Recommended)
+
+**[📥 Install YouTube Button Controller for Firefox](https://addons.mozilla.org/en-US/firefox/addon/youtube-button-controller/)**
+
+### Option 2: Manual Installation for Development
 
 1. **Download the Extension**
    ```bash
