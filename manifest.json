@@ -1,0 +1,127 @@
+﻿{
+  "manifest_version": 2,
+  "name": "YouTube Button Controller",
+  "version": "2.0",
+  "description": "Enhanced YouTube controller with keyboard shortcuts, volume control, speed adjustment, and advanced features",
+  "author": "Alireza Talebi",
+  "homepage_url": "https://github.com/AlirezaTalebi/Youtube-Buttons-Controller-Firefox-Extention",
+  "permissions": [
+    "tabs",
+    "storage",
+    "activeTab",
+    "scripting",
+    "*://*.youtube.com/*",
+    "*://youtube.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/youtube.png",
+      "32": "images/youtube.png",
+      "48": "images/youtube.png",
+      "128": "images/youtube.png"
+    }
+  },
+  "commands": {
+    "play-pause": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+P"
+      },
+      "description": "Play/Pause video"
+    },
+    "next-video": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+Right"
+      },
+      "description": "Next video"
+    },
+    "previous-video": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+Left"
+      },
+      "description": "Previous video"
+    },
+    "toggle-mute": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+M"
+      },
+      "description": "Toggle mute"
+    },
+    "volume-up": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+Up"
+      },
+      "description": "Volume up"
+    },
+    "volume-down": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+Down"
+      },
+      "description": "Volume down"
+    },
+    "theater-mode": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+T"
+      },
+      "description": "Toggle theater mode"
+    },
+    "speed-up": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+Period"
+      },
+      "description": "Increase playback speed"
+    },
+    "speed-down": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+Comma"
+      },
+      "description": "Decrease playback speed"
+    },
+    "skip-forward": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+F"
+      },
+      "description": "Skip forward 10 seconds"
+    },
+    "skip-backward": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+B"
+      },
+      "description": "Skip backward 10 seconds"
+    },
+    "stop-video": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+S"
+      },
+      "description": "Stop video"
+    },
+    "restart-video": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+R"
+      },
+      "description": "Restart video from beginning"
+    }
+  },
+  "icons": {
+    "16": "images/youtube.png",
+    "48": "images/youtube.png",
+    "128": "images/youtube.png"
+  }
+}

@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Controller v2.0</title>
+    <style>
+        /* Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 420px;
+            min-height: 600px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: all 0.3s ease;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Light Mode */
+        body.light-mode {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #212529;
+        }
+
+        /* Dark Mode */
+        body.dark-mode {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+            color: #ffffff;
+        }
+
+        /* Header */
+        .header {
+            padding: 20px;
+            text-align: center;
+            border-radius: 15px 15px 0 0;
+            position: relative;
+        }
+
+        .light-mode .header {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .dark-mode .header {
+            background: rgba(10, 10, 20, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .light-mode .theme-toggle {
+            background: rgba(100, 149, 237, 0.3);
+        }
+
+        .dark-mode .theme-toggle {
+            background: rgba(100, 149, 237, 0.2);
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        /* Container */
+        .container {
+            padding: 20px;
+        }
+
+        /* Status Section */
+        .status-section {
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .light-mode .status-indicator {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(100, 149, 237, 0.3);
+            color: #212529;
+        }
+
+        .dark-mode .status-indicator {
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(100, 149, 237, 0.2);
+        }
+
+        /* Connection Section */
+        .connection-section {
+            margin-bottom: 20px;
+        }
+
+        .get-tab-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .light-mode .get-tab-btn {
+            background: rgba(100, 149, 237, 0.4);
+            color: #ffffff;
+            border: 1px solid rgba(100, 149, 237, 0.5);
+        }
+
+        .dark-mode .get-tab-btn {
+            background: rgba(100, 149, 237, 0.3);
+            color: #ffffff;
+            border: 1px solid rgba(100, 149, 237, 0.4);
+        }
+
+        .get-tab-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .get-tab-btn.primary {
+            background: linear-gradient(45deg, #6495ed, #4169e1);
+            color: white;
+        }
+
+        /* Video Info Section */
+        .video-info {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .light-mode .video-info {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .dark-mode .video-info {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .video-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+
+        .video-details {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 10px;
+            display: none; /* Keep this hidden as it's not used */
+        }
+
+        /* Seek Bar */
+        .seek-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(100, 149, 237, 0.05);
+        }
+
+        .light-mode .seek-section {
+            background: rgba(100, 149, 237, 0.08);
+            border: 1px solid rgba(100, 149, 237, 0.15);
+        }
+
+        .dark-mode .seek-section {
+            background: rgba(100, 149, 237, 0.1);
+            border: 1px solid rgba(100, 149, 237, 0.2);
+        }
+
+        .seek-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .time-display {
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 42px;
+            text-align: center;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .light-mode .time-display {
+            background: rgba(100, 149, 237, 0.15);
+            color: #4169e1;
+        }
+
+        .dark-mode .time-display {
+            background: rgba(100, 149, 237, 0.25);
+            color: #87ceeb;
+        }
+
+        .seek-bar {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .light-mode .seek-bar {
+            background: linear-gradient(to right, #6495ed 0%, rgba(255, 255, 255, 0.4) 0%);
+            border: 1px solid rgba(100, 149, 237, 0.3);
+        }
+
+        .dark-mode .seek-bar {
+            background: linear-gradient(to right, #6495ed 0%, rgba(255, 255, 255, 0.2) 0%);
+            border: 1px solid rgba(100, 149, 237, 0.4);
+        }
+
+        .seek-bar:hover {
+            transform: scaleY(1.2);
+            box-shadow: 0 2px 8px rgba(100, 149, 237, 0.3);
+        }
+
+        .seek-bar::-webkit-slider-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #6495ed, #4169e1);
+            cursor: pointer;
+            border: 2px solid white;
+            -webkit-appearance: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .seek-bar::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 3px 10px rgba(100, 149, 237, 0.4);
+        }
+
+        .seek-bar::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #6495ed, #4169e1);
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Control Grid */
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .control-btn {
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .light-mode .control-btn {
+            background: rgba(255, 255, 255, 0.8);
+            color: #212529;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .dark-mode .control-btn {
+            background: rgba(15, 15, 35, 0.8);
+            color: #ffffff;
+            border: 1px solid rgba(100, 149, 237, 0.15);
+        }
+
+        .control-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .control-btn .icon {
+            font-size: 16px;
+        }
+
+        /* Volume Section */
+        .volume-section {
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .volume-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .volume-btn {
+            width: 35px;
+            height: 35px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .light-mode .volume-btn {
+            background: rgba(255, 255, 255, 0.8);
+            color: #212529;
+        }
+
+        .dark-mode .volume-btn {
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }
+
+        .volume-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .volume-value {
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 35px;
+        }
+
+        /* Speed Section */
+        .speed-section {
+            margin-bottom: 20px;
+        }
+
+        .speed-controls {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+
+        .speed-btn {
+            padding: 8px 4px;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .light-mode .speed-btn {
+            background: rgba(255, 255, 255, 0.25);
+            color: #333;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .dark-mode .speed-btn {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .speed-btn.active {
+            background: linear-gradient(45deg, #6495ed, #4169e1);
+            color: white;
+        }
+
+        /* Advanced Toggles */
+        .advanced-section {
+            margin-bottom: 20px;
+        }
+
+        .toggle-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .toggle-btn {
+            padding: 12px 8px;
+            border: none;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .light-mode .toggle-btn {
+            background: rgba(255, 255, 255, 0.25);
+            color: #333;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .dark-mode .toggle-btn {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .toggle-btn.active {
+            background: linear-gradient(45deg, #6495ed, #4169e1);
+            color: white;
+        }
+
+        .toggle-btn .icon {
+            font-size: 16px;
+        }
+
+        /* Settings Button */
+        .settings-section {
+            margin-top: 20px;
+        }
+
+        .settings-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .light-mode .settings-btn {
+            background: rgba(255, 255, 255, 0.3);
+            color: #333;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .dark-mode .settings-btn {
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .modal-content {
+            width: 100%;
+            max-width: 360px;
+            max-height: 90vh;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            margin: auto;
+        }
+
+        .light-mode .modal-content {
+            background: white;
+            color: #333;
+        }
+
+        .dark-mode .modal-content {
+            background: #2a2a2a;
+            color: white;
+        }
+
+        .modal-header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: inherit;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .setting-item {
+            margin-bottom: 20px;
+        }
+
+        .setting-item label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .setting-desc {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-left: 25px;
+        }
+
+        .setting-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+
+        .setting-item select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: inherit;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            display: flex;
+            gap: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn.primary {
+            background: #6495ed;
+            color: white;
+        }
+
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: inherit;
+        }
+
+        /* Input range styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-track {
+            background: rgba(255, 255, 255, 0.3);
+            height: 6px;
+            border-radius: 3px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #6495ed;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        input[type="range"]::-moz-range-track {
+            background: rgba(255, 255, 255, 0.3);
+            height: 6px;
+            border-radius: 3px;
+            border: none;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            background: #6495ed;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body class="light-mode">
+    <div class="header">
+        <h1>YouTube Controller</h1>
+        <div style="margin-top: 5px;">
+            <small style="color: #888; font-size: 10px;">
+                <a href="https://github.com/AlirezaTalebi/Youtube-Buttons-Controller-Firefox-Extention" target="_blank" style="color: #6495ed; text-decoration: none;">
+                    🐛 Report Issues • 💡 Suggestions • GitHub
+                </a>
+            </small>
+        </div>
+        <button id="darkModeToggle" class="theme-toggle" title="Toggle dark mode">🌙</button>
+    </div>
+
+    <div class="container">
+        <!-- Status Section -->
+        <div class="status-section">
+            <div id="statusIndicator" class="status-indicator">
+                Initializing...
+            </div>
+        </div>
+
+        <!-- Connection Section -->
+        <div class="connection-section">
+            <button id="getTabButton" class="get-tab-btn">
+                Find YouTube Tab
+            </button>
+        </div>
+
+        <!-- Video Info Section -->
+        <div id="videoInfo" class="video-info">
+            <div id="videoTitle" class="video-title">No video selected</div>
+            
+            <!-- Seek Bar -->
+            <div class="seek-section">
+                <div class="seek-container">
+                    <span id="currentTimeDisplay" class="time-display">0:00</span>
+                    <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0">
+                    <span id="durationDisplay" class="time-display">0:00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Controls -->
+        <div class="control-grid">
+            <button id="backButton" class="control-btn">
+                <span class="icon">⏮️</span>
+                <span>Previous</span>
+            </button>
+            <button id="stopButton" class="control-btn">
+                <span class="icon">▶️</span>
+                <span>Play</span>
+            </button>
+            <button id="nextButton" class="control-btn">
+                <span class="icon">⏭️</span>
+                <span>Next</span>
+            </button>
+            <button id="muteButton" class="control-btn">
+                <span class="icon">🔊</span>
+                <span>Mute</span>
+            </button>
+        </div>
+
+        <!-- Volume Section -->
+        <div class="volume-section">
+            <div class="section-title">
+                <span>Volume Control</span>
+            </div>
+            <div class="volume-controls">
+                <button id="volumeDown" class="volume-btn">-</button>
+                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="50">
+                <button id="volumeUp" class="volume-btn">+</button>
+                <span id="volumeValue" class="volume-value">50%</span>
+            </div>
+        </div>
+
+        <!-- Speed Section -->
+        <div class="speed-section">
+            <div class="section-title">
+                <span>Playback Speed</span>
+            </div>
+            <div class="speed-controls">
+                <button class="speed-btn" data-speed="0.5">0.5x</button>
+                <button class="speed-btn" data-speed="0.75">0.75x</button>
+                <button class="speed-btn active" data-speed="1">1x</button>
+                <button class="speed-btn" data-speed="1.25">1.25x</button>
+                <button class="speed-btn" data-speed="1.5">1.5x</button>
+                <button class="speed-btn" data-speed="2">2x</button>
+            </div>
+        </div>
+
+        <!-- Advanced Toggles -->
+        <div class="advanced-section">
+            <div class="section-title">
+                <span>Advanced Features</span>
+            </div>
+            <div class="toggle-grid">
+                <button id="theaterToggle" class="toggle-btn">
+                    <span class="icon">🎭</span>
+                    <span>Theater</span>
+                </button>
+                <button id="autoPauseToggle" class="toggle-btn">
+                    <span class="icon">⏸️</span>
+                    <span>Auto-Pause</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="settings-section">
+            <button id="settingsButton" class="settings-btn">
+                Settings
+            </button>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
