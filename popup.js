@@ -190,11 +190,13 @@ class PopupController {
         try {
           const tab = await browser.tabs.get(result.activeTabId);
           if (tab && tab.url && tab.url.includes('youtube.com')) {
+            console.log('Popup: Reconnecting to saved tab:', result.activeTabId);
             // Test connection before setting as active
             await this.testAndConnectToTab(result.activeTabId, 'Reconnected to saved tab');
             return;
           }
         } catch (error) {
+          console.log('Popup: Saved tab no longer exists');
           // Tab no longer exists, clear storage
           await browser.storage.local.remove(['activeTabId']);
         }
@@ -209,10 +211,13 @@ class PopupController {
 
   async autoDetectYouTubeTab() {
     try {
-      // Get all YouTube tabs
+      console.log('Popup: Starting YouTube tab auto-detection...');
+      // Get all YouTube tabs using correct patterns (both www and non-www)
       const youtubeTabs = await browser.tabs.query({ 
-        url: '*://www.youtube.com/watch*'
+        url: ['*://*.youtube.com/watch*', '*://youtube.com/watch*']
       });
+
+      console.log('Popup: Found', youtubeTabs.length, 'YouTube tabs');
 
       if (youtubeTabs.length === 0) {
         // No YouTube tabs found
@@ -254,47 +259,58 @@ class PopupController {
   }
 
   async findPlayingYouTubeTab(youtubeTabs) {
+    console.log('Popup: Searching for playing YouTube tab...');
     for (const tab of youtubeTabs) {
       try {
+        console.log('Popup: Checking tab', tab.id, '-', tab.url);
         const response = await browser.tabs.sendMessage(tab.id, { 
           action: 'getPlayerState' 
         });
         
-        if (response && response.success && response.state.isValidPage && 
+        console.log('Popup: Tab response:', response);
+        if (response && response.success && response.state && response.state.isValidPage && 
             response.state.isReady && response.state.isPlaying) {
+          console.log('Popup: Found playing tab:', tab.id);
           return tab;
         }
       } catch (error) {
         // Tab might not have content script injected yet, skip
+        console.debug('Popup: Tab', tab.id, 'error:', error.message);
         continue;
       }
     }
+    console.log('Popup: No playing tabs found');
     return null;
   }
 
   async testAndConnectToTab(tabId, message) {
+    console.log('Popup: Testing connection to tab', tabId, '-', message);
     try {
       // Test if content script is responding
       const response = await browser.tabs.sendMessage(tabId, { 
         action: 'getPlayerState' 
       });
       
-      if (response && response.success && response.state.isValidPage) {
+      console.log('Popup: Tab response:', response);
+      
+      if (response && response.success && response.state && response.state.isValidPage) {
         this.activeTabId = tabId;
         this.isYouTubeTab = true;
+        console.log('Popup: Successfully connected to tab', tabId);
         await browser.storage.local.set({ activeTabId: tabId });
         await this.updatePlayerState();
         this.showStatus(message, 'success');
         this.updateUI();
       } else {
-        // Page might not be ready, retry once after a delay
+        // Page might not be ready, retry with longer delay
+        console.log('Popup: Tab not ready, will retry with longer delay');
         setTimeout(async () => {
           try {
             const retryResponse = await browser.tabs.sendMessage(tabId, { 
               action: 'getPlayerState' 
             });
             
-            if (retryResponse && retryResponse.success && retryResponse.state.isValidPage) {
+            if (retryResponse && retryResponse.success && retryResponse.state && retryResponse.state.isValidPage) {
               this.activeTabId = tabId;
               this.isYouTubeTab = true;
               await browser.storage.local.set({ activeTabId: tabId });
@@ -303,19 +319,42 @@ class PopupController {
               this.updateUI();
             }
           } catch (retryError) {
-            // Content script not ready, will be picked up by auto-detection
+            // Content script not ready yet
+            console.log('Popup: Retry 1 failed, content script may not be loaded yet');
+            // Try one more time with even longer delay
+            setTimeout(async () => {
+              try {
+                const retry2Response = await browser.tabs.sendMessage(tabId, { 
+                  action: 'getPlayerState' 
+                });
+                
+                if (retry2Response && retry2Response.success && retry2Response.state && retry2Response.state.isValidPage) {
+                  this.activeTabId = tabId;
+                  this.isYouTubeTab = true;
+                  await browser.storage.local.set({ activeTabId: tabId });
+                  await this.updatePlayerState();
+                  this.showStatus(message, 'success');
+                  this.updateUI();
+                }
+              } catch (retry2Error) {
+                console.log('Popup: Retry 2 failed - will keep trying in background');
+              }
+            }, 2000);
           }
-        }, 1000);
+        }, 1500);
       }
     } catch (error) {
-      // Content script might not be injected yet, retry once
+      // Content script not injected yet
+      console.log('Popup: Content script not responding, will retry:', error.message);
+      
+      // First retry with longer delay
       setTimeout(async () => {
         try {
           const response = await browser.tabs.sendMessage(tabId, { 
             action: 'getPlayerState' 
           });
           
-          if (response && response.success && response.state.isValidPage) {
+          if (response && response.success && response.state && response.state.isValidPage) {
             this.activeTabId = tabId;
             this.isYouTubeTab = true;
             await browser.storage.local.set({ activeTabId: tabId });
@@ -324,9 +363,30 @@ class PopupController {
             this.updateUI();
           }
         } catch (retryError) {
-          // Will be handled by auto-detection
+          console.log('Popup: Retry 1 failed:', retryError.message);
+          
+          // Second retry with even longer delay
+          setTimeout(async () => {
+            try {
+              const response2 = await browser.tabs.sendMessage(tabId, { 
+                action: 'getPlayerState' 
+              });
+              
+              if (response2 && response2.success && response2.state && response2.state.isValidPage) {
+                this.activeTabId = tabId;
+                this.isYouTubeTab = true;
+                await browser.storage.local.set({ activeTabId: tabId });
+                await this.updatePlayerState();
+                this.showStatus(message, 'success');
+                this.updateUI();
+              }
+            } catch (retry2Error) {
+              console.log('Popup: Retry 2 failed:', retry2Error.message);
+              console.log('Popup: Content script still not responding - may be blocked or not injected');
+            }
+          }, 3000);
         }
-      }, 1500);
+      }, 2000);
     }
   }
 

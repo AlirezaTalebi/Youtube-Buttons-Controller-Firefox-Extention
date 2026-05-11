@@ -1,6 +1,6 @@
 /**
  * YouTube Button Controller - Content Script
- * Optimized Content Script for YouTube Button Controller
+ * Optimized Content Script for YouTube Button Controller (Manifest V3)
  * Provides efficient DOM manipulation and caching
  * 
  * Author: Alireza Talebi
@@ -8,12 +8,127 @@
  * License: GPL-3.0
  */
 
+console.log('YT Controller: Content script loaded, URL:', window.location.href);
+
 // Prevent multiple injections
 if (window.youtubeControllerInjected) {
-  
+  console.log('YT Controller: Already injected, skipping');
 } else {
+  console.log('YT Controller: First injection, initializing...');
   
   window.youtubeControllerInjected = true;
+  let youtubeController = null;
+  const commandQueue = [];
+
+// Register message listener IMMEDIATELY - before YouTubeController initialization
+console.log('YT Controller: Registering message listener...');
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('YT Controller: Received message:', message.action || message.command);
+  
+  let result = { success: false, error: 'Not initialized yet' };
+
+  // If youtubeController is not ready, queue the command
+  if (!youtubeController || !youtubeController.isInitialized) {
+    console.log('YT Controller: Controller not ready, queueing command:', message.action || message.command);
+    commandQueue.push({ message, sendResponse });
+    return true; // Keep channel open
+  }
+
+  // Process the command
+  try {
+    switch (message.action || message.command) {
+      // Player state queries
+      case 'getPlayerState':
+        const state = youtubeController.getPlayerState();
+        result = { success: !!state, state: state };
+        break;
+
+      case 'isValidPage':
+        result = { success: true, isValidPage: youtubeController.isVideoPage };
+        break;
+
+      // Playback control commands
+      case 'clickPlayPause':
+        const playSuccess = youtubeController.clickPlayPause();
+        result = { success: playSuccess };
+        break;
+
+      case 'clickNext':
+        const nextSuccess = youtubeController.clickNext();
+        result = { success: nextSuccess };
+        break;
+
+      case 'clickPrevious':
+        const prevSuccess = youtubeController.clickPrevious();
+        result = { success: prevSuccess };
+        break;
+
+      case 'clickMute':
+        const muteSuccess = youtubeController.clickMute();
+        result = { success: muteSuccess };
+        break;
+
+      // Volume control
+      case 'setVolume':
+        const volumeSuccess = youtubeController.setVolume(message.volume);
+        result = { success: volumeSuccess, volume: message.volume };
+        break;
+
+      case 'getVolume':
+        const volume = youtubeController.getVolume();
+        result = { success: volume !== null, volume: volume };
+        break;
+
+      case 'volumeUp':
+        const upSuccess = youtubeController.volumeUp();
+        result = { success: upSuccess };
+        break;
+
+      case 'volumeDown':
+        const downSuccess = youtubeController.volumeDown();
+        result = { success: downSuccess };
+        break;
+
+      // Playback speed commands
+      case 'setPlaybackSpeed':
+        const speedSuccess = youtubeController.setPlaybackSpeed(message.speed);
+        result = { success: speedSuccess, speed: message.speed };
+        break;
+
+      // Theater mode toggle
+      case 'toggleTheaterMode':
+        const theaterSuccess = youtubeController.toggleTheaterMode();
+        result = { success: theaterSuccess };
+        break;
+
+      // Video progress commands
+      case 'getVideoProgress':
+        const progress = youtubeController.getVideoProgress();
+        result = { success: !!progress, progress: progress };
+        break;
+
+      case 'seekTo':
+        const seekSuccess = youtubeController.seekTo(message.time);
+        result = { success: seekSuccess };
+        break;
+
+      case 'skip':
+        const skipSuccess = youtubeController.skip(message.seconds);
+        result = { success: skipSuccess };
+        break;
+
+      default:
+        result = { success: false, error: 'Unknown command: ' + (message.action || message.command) };
+    }
+  } catch (error) {
+    result = { success: false, error: error.message };
+  }
+
+  sendResponse(result);
+  return true; // Keep channel open for async operations
+});
+
+console.log('YT Controller: Message listener registered');
 
 class YouTubeController {
   constructor() {
@@ -34,8 +149,18 @@ class YouTubeController {
   }
 
   checkVideoPage() {
-    this.isVideoPage = window.location.pathname === '/watch' && 
-                      window.location.search.includes('v=');
+    // Check if current page is a YouTube watch page (both youtube.com and www.youtube.com)
+    this.isVideoPage = /\/watch/.test(window.location.pathname) && 
+                      window.location.search.includes('v=') &&
+                      window.location.hostname.includes('youtube.com');
+    
+    // Debug log
+    console.log('YT Controller: Video page check -', { 
+      isVideoPage: this.isVideoPage,
+      pathname: window.location.pathname,
+      search: window.location.search,
+      hostname: window.location.hostname
+    });
     
     
     
@@ -385,247 +510,118 @@ class YouTubeController {
 
 // Initialize controller only once
 if (!window.youtubeController) {
+  youtubeController = new YouTubeController();
+  window.youtubeController = youtubeController;
   
-  window.youtubeController = new YouTubeController();
+  console.log('YT Controller: YouTubeController initialized, processing queued commands...');
   
-} else {
-  
-}
-const youtubeController = window.youtubeController;
-
-
-
-// Single message listener for all commands
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  
-  
-  
-  
-
-  // Always respond to getPlayerState for connection testing
-  if (message.action === 'getPlayerState') {
+  // Process queued commands
+  while (commandQueue.length > 0) {
+    const queued = commandQueue.shift();
+    console.log('YT Controller: Processing queued command:', queued.message.action || queued.message.command);
+    
+    // Re-send the queued message to the listener
+    const fakeMessage = queued.message;
+    const fakeSendResponse = queued.sendResponse;
+    
+    let result = { success: false, error: 'Not initialized yet' };
     
     try {
-      
-      
-      if (!youtubeController.isVideoPage) {
+      switch (fakeMessage.action || fakeMessage.command) {
+        case 'getPlayerState':
+          const state = youtubeController.getPlayerState();
+          result = { success: !!state, state: state };
+          break;
         
-        const response = { success: false, error: 'Not on video page', state: { isValidPage: false } };
+        case 'isValidPage':
+          result = { success: true, isValidPage: youtubeController.isVideoPage };
+          break;
         
-        sendResponse(response);
-        return;
-      }
-      
-      const playerState = youtubeController.getPlayerState();
-      
-      const response = { success: true, state: playerState };
-      
-      sendResponse(response);
-      return;
-    } catch (error) {
-      
-      const errorResponse = { success: false, error: 'Player state error: ' + error.message };
-      
-      sendResponse(errorResponse);
-      return;
-    }
-  }
-
-  if (!youtubeController.isVideoPage) {
-    
-    const response = { success: false, error: 'Not on video page' };
-    
-    sendResponse(response);
-    return;
-  }
-
-  let result = { success: false };
-
-  try {
-    const command = message.action || message.command;
-    
-    switch (command) {
-      case 'clickPlayPause':
-      case 'play-pause':
-        const playPauseState = youtubeController.clickPlayPause();
-        result = { success: true, state: playPauseState };
-        break;
-
-      case 'clickNext':
-      case 'next-video':
-        const nextSuccess = youtubeController.clickNext();
-        result = { success: nextSuccess };
-        break;
-
-      case 'clickBack':
-      case 'clickPrevious':
-      case 'previous-video':
-        const prevSuccess = youtubeController.clickPrevious();
-        result = { success: prevSuccess };
-        break;
-
-      // NEW: Stop and Restart commands
-      case 'stop-video':
-        const stopState = youtubeController.clickPlayPause();
-        result = { success: true, state: stopState };
-        break;
-
-      case 'restart-video':
-        if (youtubeController.video) {
-          youtubeController.video.currentTime = 0;
-          result = { success: true };
-        } else {
-          result = { success: false, error: 'Video not found' };
-        }
-        break;
-
-      case 'clickMute':
-      case 'toggle-mute':
-        const muteState = youtubeController.clickMute();
-        result = { success: true, state: muteState };
-        break;
-
-      // NEW: Volume shortcuts
-      case 'volume-up':
-        if (message.command === 'volume-up') {
-          const video = document.querySelector('video');
-          if (video) {
-            const newVolume = Math.min(1, video.volume + 0.1);
-            video.volume = newVolume;
-            result = { success: true, volume: Math.round(newVolume * 100) };
-          }
-        }
-        break;
-
-      case 'volume-down':
-        if (message.command === 'volume-down') {
-          const video = document.querySelector('video');
-          if (video) {
-            const newVolume = Math.max(0, video.volume - 0.1);
-            video.volume = newVolume;
-            result = { success: true, volume: Math.round(newVolume * 100) };
-          }
-        }
-        break;
-
-      // NEW: Theater mode shortcut
-      case 'theater-mode':
-        if (message.command === 'theater-mode') {
+        case 'clickPlayPause':
+          const playSuccess = youtubeController.clickPlayPause();
+          result = { success: playSuccess };
+          break;
+        
+        case 'clickNext':
+          const nextSuccess = youtubeController.clickNext();
+          result = { success: nextSuccess };
+          break;
+        
+        case 'clickPrevious':
+          const prevSuccess = youtubeController.clickPrevious();
+          result = { success: prevSuccess };
+          break;
+        
+        case 'clickMute':
+          const muteSuccess = youtubeController.clickMute();
+          result = { success: muteSuccess };
+          break;
+        
+        case 'setVolume':
+          const volumeSuccess = youtubeController.setVolume(fakeMessage.volume);
+          result = { success: volumeSuccess, volume: fakeMessage.volume };
+          break;
+        
+        case 'getVolume':
+          const volume = youtubeController.getVolume();
+          result = { success: volume !== null, volume: volume };
+          break;
+        
+        case 'volumeUp':
+          const upSuccess = youtubeController.volumeUp();
+          result = { success: upSuccess };
+          break;
+        
+        case 'volumeDown':
+          const downSuccess = youtubeController.volumeDown();
+          result = { success: downSuccess };
+          break;
+        
+        case 'setPlaybackSpeed':
+          const speedSuccess = youtubeController.setPlaybackSpeed(fakeMessage.speed);
+          result = { success: speedSuccess, speed: fakeMessage.speed };
+          break;
+        
+        case 'toggleTheaterMode':
           const theaterSuccess = youtubeController.toggleTheaterMode();
           result = { success: theaterSuccess };
-        }
-        break;
-
-      // NEW: Speed control shortcuts
-      case 'speed-up':
-        if (message.command === 'speed-up') {
-          const video = document.querySelector('video');
-          if (video) {
-            const newSpeed = Math.min(2, video.playbackRate + 0.25);
-            video.playbackRate = newSpeed;
-            result = { success: true, speed: newSpeed };
-          }
-        }
-        break;
-
-      case 'speed-down':
-        if (message.command === 'speed-down') {
-          const video = document.querySelector('video');
-          if (video) {
-            const newSpeed = Math.max(0.25, video.playbackRate - 0.25);
-            video.playbackRate = newSpeed;
-            result = { success: true, speed: newSpeed };
-          }
-        }
-        break;
-
-      // NEW: Skip shortcuts
-      case 'skip-forward':
-        if (message.command === 'skip-forward') {
-          const skipSuccess = youtubeController.skip(10);
+          break;
+        
+        case 'getVideoProgress':
+          const progress = youtubeController.getVideoProgress();
+          result = { success: !!progress, progress: progress };
+          break;
+        
+        case 'seekTo':
+          const seekSuccess = youtubeController.seekTo(fakeMessage.time);
+          result = { success: seekSuccess };
+          break;
+        
+        case 'skip':
+          const skipSuccess = youtubeController.skip(fakeMessage.seconds);
           result = { success: skipSuccess };
-        }
-        break;
-
-      case 'skip-backward':
-        if (message.command === 'skip-backward') {
-          const skipSuccess = youtubeController.skip(-10);
-          result = { success: skipSuccess };
-        }
-        break;
-      case 'toggle-mute':
-        if (message.command === 'toggle-mute' || message.action === 'clickMute') {
-          const state = youtubeController.clickMute();
-          result = { success: true, state: state };
-        }
-        break;
-
-      case 'clickBack':
-        const backSuccess = youtubeController.goBack();
-        result = { success: backSuccess };
-        break;
-
-      case 'getPlayerState':
-        const playerState = youtubeController.getPlayerState();
-        result = { success: true, state: playerState };
-        break;
-
-      // Volume control commands
-      case 'setVolume':
-        const volumeSuccess = youtubeController.setVolume(message.volume);
-        result = { success: volumeSuccess, volume: message.volume };
-        break;
-
-      // Playback speed commands
-      case 'setPlaybackSpeed':
-        const speedSuccess = youtubeController.setPlaybackSpeed(message.speed);
-        result = { success: speedSuccess, speed: message.speed };
-        break;
-
-      // Theater mode toggle
-      case 'toggleTheaterMode':
-        const theaterSuccess = youtubeController.toggleTheaterMode();
-        result = { success: theaterSuccess };
-        break;
-
-      // Video progress commands
-      case 'getVideoProgress':
-        const progress = youtubeController.getVideoProgress();
-        result = { success: !!progress, progress: progress };
-        break;
-
-      case 'seekTo':
-        const seekSuccess = youtubeController.seekTo(message.time);
-        result = { success: seekSuccess };
-        break;
-
-      case 'skip':
-        const skipSuccess = youtubeController.skip(message.seconds);
-        result = { success: skipSuccess };
-        break;
-
-      default:
-        result = { success: false, error: 'Unknown command: ' + (message.action || message.command) };
+          break;
+        
+        default:
+          result = { success: false, error: 'Unknown command: ' + (fakeMessage.action || fakeMessage.command) };
+      }
+    } catch (error) {
+      result = { success: false, error: error.message };
     }
-  } catch (error) {
     
-    result = { success: false, error: error.message };
+    fakeSendResponse(result);
   }
-
-  
-  sendResponse(result);
-});
+} else {
+  youtubeController = window.youtubeController;
+}
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
-  
   if (window.youtubeController) {
     window.youtubeController.destroy();
   }
 });
 
-
-
-
+console.log('YT Controller: Content script fully initialized, ready for messages');
 
 } // End of injection guard

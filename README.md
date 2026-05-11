@@ -78,17 +78,36 @@ A powerful Firefox extension for advanced YouTube video control with keyboard sh
 - Toggle dark mode, auto-detection, and auto-pause features
 ## Configuration Options
 
-- **Auto-detect YouTube tabs**: Automatically find and connect to YouTube videos
-- **Auto-pause on tab switch**: Pause videos when switching to other tabs  
-- **Dark mode**: Toggle dark theme for the extension popup (default: enabled)
+- **Auto-detect YouTube tabs**: Automatically find and connect to YouTube videos (enabled by default)
+- **Auto-pause on tab switch**: Pause videos when switching to other tabs (enabled by default)
+- **Dark mode**: Toggle dark theme for the extension popup (enabled by default)
 - **Volume step**: Set volume change amount (5%, 10%, 15%, 20%)
-- **Update interval**: Set how often video information updates
+- **Update interval**: Set how often video information updates (default: 500ms)
+
+## Troubleshooting
+
+### Extension not connecting to YouTube tab?
+- Ensure the YouTube tab is fully loaded and visible
+- The extension automatically detects YouTube tabs and connects within 1-2 seconds
+- If issues persist, try reloading the YouTube tab
+
+### Keyboard shortcuts not working?
+- Verify Firefox has focus (extension shortcuts require the browser window to be active)
+- Check that shortcuts don't conflict with system or other extension shortcuts
+- Consult the Keyboard Shortcuts table above for the correct key combinations
+
+### Video controls unresponsive?
+- Ensure you're on an actual YouTube video page (youtube.com/watch)
+- Try clicking the extension icon to reconnect to the tab
+- Check browser console (F12) for any error messages
 
 ## Technical Details
 
-**Browser Compatibility:** Firefox (Manifest V2) - Fully supported
+**Browser Compatibility:** Firefox (Manifest V3) - Fully supported
 
 **System Requirements:** Firefox 89.0 or later
+
+**Latest Version:** 2.2.0 - Content script injection optimized and fully functional
 
 ## License
 
