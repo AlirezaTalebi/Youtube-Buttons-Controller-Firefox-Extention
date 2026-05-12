@@ -204,6 +204,200 @@
             color: white;
         }
 
+        /* Current Video Card */
+        .video-info {
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .current-video-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .current-video-thumb-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .current-video-thumb-wrap {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border-radius: 10px;
+            overflow: hidden;
+            background: rgba(127, 127, 127, 0.16);
+            border: 1px solid rgba(127, 127, 127, 0.18);
+        }
+
+        .current-video-thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .current-video-thumb-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--text-muted);
+        }
+
+        .current-video-progress-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .current-video-progress {
+            width: 100%;
+            height: 10px;
+            cursor: pointer;
+            -webkit-appearance: slider-horizontal;
+            appearance: slider-horizontal;
+            background: transparent;
+            border: none;
+        }
+
+        .current-video-progress::-webkit-slider-track {
+            width: 100%;
+            height: 10px;
+            background: rgba(127, 127, 127, 0.18);
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            border-radius: 999px;
+        }
+
+        .current-video-progress::-webkit-slider-thumb {
+            -webkit-appearance: slider-thumb;
+            appearance: slider-thumb;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6495ed;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        .current-video-progress::-moz-range-track {
+            background: rgba(127, 127, 127, 0.18);
+            border: 1px solid rgba(127, 127, 127, 0.12);
+            border-radius: 999px;
+            height: 10px;
+        }
+
+        .current-video-progress::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6495ed;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        .current-video-time {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            font-family: 'Courier New', monospace;
+        }
+
+        .current-video-body {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .current-video-title {
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.35;
+            margin-bottom: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            min-width: 0;
+        }
+
+        .current-video-channel {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .current-video-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .current-video-btn {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(100, 149, 237, 0.45);
+            background: rgba(100, 149, 237, 0.12);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+        }
+
+        .current-video-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            background: rgba(100, 149, 237, 0.2);
+        }
+
+        .current-video-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .current-video-btn.secondary {
+            background: rgba(127, 127, 127, 0.12);
+            border-color: rgba(127, 127, 127, 0.28);
+        }
+
+        .current-video-btn.secondary:hover:not(:disabled) {
+            background: rgba(127, 127, 127, 0.18);
+        }
+
+        .light-mode .current-video-btn {
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+        }
+
+        .dark-mode .current-video-btn {
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+        }
+
         /* Video Info Section */
         .video-info {
             margin-bottom: 20px;
@@ -336,9 +530,11 @@
         /* Control Grid */
         .control-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 10px;
             margin-bottom: 20px;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .control-btn {
@@ -875,6 +1071,9 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            max-width: 100%;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .status-section,
@@ -1313,6 +1512,33 @@
             </button>
         </div>
 
+        <!-- Current Video Section -->
+        <div id="videoInfo" class="video-info">
+            <div class="section-title" style="margin-bottom: 12px;">
+                <span>Current Video</span>
+            </div>
+            <div class="current-video-card">
+                <div class="current-video-thumb-section">
+                    <div class="current-video-thumb-wrap">
+                        <img id="currentVideoThumbnail" class="current-video-thumb" alt="Current video preview">
+                        <div id="currentVideoThumbnailPlaceholder" class="current-video-thumb-placeholder">No preview</div>
+                    </div>
+                    <div class="current-video-progress-section">
+                        <input type="range" id="currentVideoProgressBar" class="current-video-progress" min="0" max="1000" value="0" step="1" aria-label="Video progress">
+                        <div id="currentVideoTime" class="current-video-time">--:-- / --:--</div>
+                    </div>
+                </div>
+                <div class="current-video-body">
+                    <div id="videoTitle" class="current-video-title" title="">No video selected</div>
+                    <div id="currentVideoChannel" class="current-video-channel">Unknown channel</div>
+                    <div class="current-video-actions">
+                        <button id="focusTabButton" class="current-video-btn" type="button">Focus Tab</button>
+                        <button id="openVideoButton" class="current-video-btn secondary" type="button">Open Video</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Layout Section -->
         <div class="layout-section">
             <div class="section-title">
@@ -1327,20 +1553,6 @@
                         <option value="wide">Wide</option>
                     </select>
                 </label>
-            </div>
-        </div>
-
-        <!-- Video Info Section -->
-        <div id="videoInfo" class="video-info">
-            <div id="videoTitle" class="video-title">No video selected</div>
-            
-            <!-- Seek Bar -->
-            <div class="seek-section">
-                <div class="seek-container">
-                    <span id="currentTimeDisplay" class="time-display">0:00</span>
-                    <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0">
-                    <span id="durationDisplay" class="time-display">0:00</span>
-                </div>
             </div>
         </div>
 

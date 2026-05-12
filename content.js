@@ -199,6 +199,18 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         result = { ok: true, success: true, action: 'getVideoStats', stats: stats };
         break;
 
+      // Seek to time
+      case 'seekTo':
+        const seekVideo = document.querySelector('video');
+        if (seekVideo && typeof message.time === 'number') {
+          seekVideo.currentTime = Math.max(0, message.time);
+          result = { ok: true, success: true, action: 'seekTo', result: { currentTime: seekVideo.currentTime } };
+          addDebugLog('[Content]', 'info', 'seekTo', 'seek executed', { targetTime: message.time, actualTime: seekVideo.currentTime });
+        } else {
+          result = { ok: false, success: false, action: 'seekTo', error: 'No video or invalid time' };
+        }
+        break;
+
       default:
         const unknownCmd = action;
         result = buildCommandFailure(unknownCmd, 'Unknown command: ' + unknownCmd);
@@ -533,7 +545,10 @@ class YouTubeController {
       isValidPage: state.isValidPage,
       title: state.title,
       paused: state.paused,
-      isPlaying: state.isPlaying
+      isPlaying: state.isPlaying,
+      videoId: state.videoId,
+      channelName: state.channelName,
+      thumbnailUrl: state.thumbnailUrl
     });
 
     return state;
@@ -579,10 +594,39 @@ class YouTubeController {
   }
 
   getThumbnailUrl() {
-    return this.cleanText(
+    const videoId = this.getVideoId();
+    if (videoId) {
+      const url = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      addDebugLog('[CurrentVideo]', 'info', 'getThumbnailUrl', 'using videoId thumbnail', { videoId, quality: 'hqdefault' });
+      console.log('[CurrentVideo] videoId:', videoId, 'thumbnail:', url);
+      return url;
+    }
+
+    const metaThumbnail = this.cleanText(
       document.querySelector('meta[property="og:image"]')?.getAttribute('content') ||
-      document.querySelector('link[itemprop="thumbnailUrl"]')?.getAttribute('href')
+      document.querySelector('link[itemprop="thumbnailUrl"]')?.getAttribute('href') ||
+      document.querySelector('meta[name="twitter:image"]')?.getAttribute('content')
     );
+
+    if (metaThumbnail && !this.isGenericImage(metaThumbnail)) {
+      addDebugLog('[CurrentVideo]', 'info', 'getThumbnailUrl', 'meta thumbnail accepted', { source: 'meta-tag', url: metaThumbnail });
+      console.log('[CurrentVideo] meta thumbnail:', metaThumbnail);
+      return metaThumbnail;
+    }
+
+    if (metaThumbnail) {
+      addDebugLog('[CurrentVideo]', 'info', 'getThumbnailUrl', 'rejected generic thumbnail', { url: metaThumbnail });
+      console.log('[CurrentVideo] rejected generic image:', metaThumbnail);
+    }
+
+    addDebugLog('[CurrentVideo]', 'info', 'getThumbnailUrl', 'no thumbnail available', { reason: 'no videoId and no valid meta tags' });
+    return '';
+  }
+
+  isGenericImage(url) {
+    if (!url) return true;
+    const generic = ['yt_1200', '/img/desktop/', '/img/', 'logo', 'youtube.com/img'];
+    return generic.some(pattern => url.toLowerCase().includes(pattern));
   }
 
   cleanVideoTitle(value) {

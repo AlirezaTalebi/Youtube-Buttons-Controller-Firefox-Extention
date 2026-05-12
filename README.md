@@ -7,13 +7,15 @@ Firefox extension for controlling YouTube playback from the popup and keyboard s
 
 ## Current Version
 
-2.3.0
+2.4.0
 
 ## Features
 
+- Current Video card with real YouTube thumbnail
+- Live seekable progress bar
 - Play/Pause
-- Mute
 - Previous/Next
+- Mute
 - Speed controls
 - Volume controls
 - Auto-pause on tab switch

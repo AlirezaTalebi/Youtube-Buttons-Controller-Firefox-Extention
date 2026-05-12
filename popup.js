@@ -15,8 +15,19 @@ const HELP_TOPICS = [
     title: 'Basic Controls',
     items: [
       'Play/Pause controls the current YouTube video.',
+      'Previous/Next use YouTube playlist/video navigation when available.',
       'Mute toggles video sound.',
-      'Speed and volume controls change the active video.'
+      'Speed and Volume controls affect the active video.'
+    ]
+  },
+  {
+    title: 'Current Video Card',
+    items: [
+      'Shows the current video thumbnail, title, channel, and playback progress.',
+      'The progress bar updates while the popup is open.',
+      'Drag the progress bar to seek forward or backward in the video.',
+      'Focus Tab brings the YouTube tab to the foreground.',
+      'Open Video opens or focuses the current video URL.'
     ]
   },
   {
@@ -34,6 +45,22 @@ const HELP_TOPICS = [
       'Clear Channel Profile removes the saved profile for this channel.',
       'Save Global Default stores a fallback profile for channels without their own profile.',
       'Apply Global Default applies the global speed, volume, and mute immediately.'
+    ]
+  },
+  {
+    title: 'Watch History + Resume',
+    items: [
+      'Watched videos are saved locally in the extension.',
+      'The Resume section shows recent videos with their saved playback position.',
+      'Click a video in Resume to reopen it at the saved timestamp.',
+      'Search filters the local watch history.'
+    ]
+  },
+  {
+    title: 'Popup Size and Theme',
+    items: [
+      'Popup Size changes between Compact (340px), Normal (390px), and Wide (480px) layouts.',
+      'Theme switches between Light and Dark mode based on your preference.'
     ]
   },
   {
@@ -138,6 +165,9 @@ class PopupController {
       'volumeSlider', 'volumeUp', 'volumeDown', 'volumeValue',
       'autoPauseToggle', 'captionsToggle', 'settingsButton',
       'statusIndicator', 'videoInfo', 'videoTitle',
+      'currentVideoThumbnail', 'currentVideoThumbnailPlaceholder', 'currentVideoChannel',
+      'currentVideoProgressBar', 'currentVideoTime',
+      'focusTabButton', 'openVideoButton',
       'darkModeToggle', 'seekBar', 'currentTimeDisplay', 'durationDisplay',
       'cancelSleepBtn', 'sleepTimerDisplay', 'sleepCountdown',
       'statsPanel', 'statsDuration', 'statsProgress', 'statsBitrate', 'statsResolution',
@@ -203,6 +233,24 @@ class PopupController {
 
     this.buttons.volumeDown?.addEventListener('click', () => {
       this.adjustVolume(-10);
+    });
+
+    this.buttons.focusTabButton?.addEventListener('click', () => {
+      this.focusControlledTab();
+    });
+
+    this.buttons.openVideoButton?.addEventListener('click', () => {
+      this.openCurrentVideo();
+    });
+
+    // Progress bar seeking
+    this.buttons.currentVideoProgressBar?.addEventListener('change', (e) => {
+      const value = Number(e.target.value);
+      const percent = value / 1000;
+      if (this.lastPlayerState?.duration > 0) {
+        const targetTime = this.lastPlayerState.duration * percent;
+        this.seekTo(targetTime);
+      }
     });
 
     // Speed controls
@@ -542,10 +590,10 @@ class PopupController {
       this.updateInterval = null;
     }
 
-    // Update time every second when connected
+    // Update progress and time every second when connected
     this.updateInterval = setInterval(async () => {
       if (this.isYouTubeTab && this.activeTabId && !this.isDragging) {
-        await this.updateTimeDisplay();
+        await this.updatePlayerState();
         // Update stats every 2 seconds
         if (Math.random() > 0.5) {
           await this.updateVideoStats();
@@ -831,6 +879,8 @@ class PopupController {
   }
 
   updatePlayerUI(state) {
+    this.videoInfo = state || {};
+
     // Update play/pause button
     if (this.buttons.stopButton) {
       const iconSpan = this.buttons.stopButton.querySelector('.icon');
@@ -861,7 +911,7 @@ class PopupController {
     }
 
     // Update video info
-    this.updateVideoInfo(state);
+    this.updateCurrentVideoCard(state);
     
     // Update volume if available
     if (state.volume !== undefined) {
@@ -1373,28 +1423,223 @@ class PopupController {
     }
   }
 
-  // NEW: Video information display
-  updateVideoInfo(state) {
+  // Current video card
+  updateCurrentVideoCard(state) {
+    const safeState = state || {};
+    this.lastPlayerState = safeState;
+    const hasVideoId = !!safeState.videoId;
+    const title = safeState.title || safeState.videoTitle || (safeState.hasVideo ? 'Video detected - title unavailable' : 'No video selected');
+    const channelName = safeState.channelName || 'Unknown channel';
+    const duration = Number(safeState.duration) || 0;
+    const currentTime = Math.max(0, Number(safeState.currentTime) || 0);
+    const progress = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+    const thumbnailUrl = this.getThumbnailUrl(safeState);
+
     if (this.buttons.videoTitle) {
-      const displayTitle = state.title || state.videoTitle;
-      if (displayTitle) {
-        this.buttons.videoTitle.textContent = displayTitle;
-      } else if (state.hasVideo || (state.isValidPage && state.duration > 0)) {
-        // Video exists but title not found yet
-        this.buttons.videoTitle.textContent = 'Video detected - title unavailable';
-      } else if (!state.isValidPage) {
-        // No valid video page
-        this.buttons.videoTitle.textContent = 'No video selected';
+      this.buttons.videoTitle.textContent = title;
+      this.buttons.videoTitle.setAttribute('title', title);
+    }
+
+    if (this.buttons.currentVideoChannel) {
+      this.buttons.currentVideoChannel.textContent = channelName;
+    }
+
+    if (this.buttons.currentVideoTime) {
+      const timeText = duration > 0
+        ? `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`
+        : '--:-- / --:--';
+      this.buttons.currentVideoTime.textContent = timeText;
+    }
+
+    if (this.buttons.currentVideoProgressBar) {
+      this.buttons.currentVideoProgressBar.value = Math.round(progress * 10);
+    }
+
+    if (this.buttons.currentVideoThumbnail && this.buttons.currentVideoThumbnailPlaceholder) {
+      if (thumbnailUrl) {
+        this.buttons.currentVideoThumbnail.src = thumbnailUrl;
+        this.buttons.currentVideoThumbnail.style.display = 'block';
+        this.buttons.currentVideoThumbnailPlaceholder.style.display = 'none';
+        this.setupThumbnailFallback(this.buttons.currentVideoThumbnail, safeState.videoId);
+        this.addDebugLog('[CurrentVideo]', 'info', 'thumbnail', 'image loading', { url: thumbnailUrl, videoId: safeState.videoId });
+        console.log('[CurrentVideo] thumbnail loading:', thumbnailUrl);
+      } else {
+        this.buttons.currentVideoThumbnail.removeAttribute('src');
+        this.buttons.currentVideoThumbnail.style.display = 'none';
+        this.buttons.currentVideoThumbnailPlaceholder.style.display = 'flex';
+        this.addDebugLog('[CurrentVideo]', 'info', 'thumbnail', 'no thumbnail url', { videoId: safeState.videoId });
+        console.log('[CurrentVideo] no thumbnail url');
       }
-      this.buttons.videoInfo.style.display = 'block';
+    }
+
+    if (this.buttons.focusTabButton) {
+      this.buttons.focusTabButton.disabled = !this.activeTabId;
+    }
+
+    if (this.buttons.openVideoButton) {
+      this.buttons.openVideoButton.disabled = !safeState.url && !hasVideoId;
+    }
+
+    if (!hasVideoId && !safeState.url) {
+      console.log('[CurrentVideo] no video');
+      this.addDebugLog('[CurrentVideo]', 'info', 'render', 'no video');
+    } else {
+      console.log('[CurrentVideo] card rendered', { videoId: safeState.videoId, title, channelName, duration, currentTime, progress });
+      this.addDebugLog('[CurrentVideo]', 'info', 'render', 'card rendered', {
+        videoId: safeState.videoId,
+        title,
+        channelName,
+        duration,
+        progress: Math.round(progress)
+      });
+    }
+
+    if (!thumbnailUrl && hasVideoId) {
+      console.log('[CurrentVideo] thumbnail fallback used');
+      this.addDebugLog('[CurrentVideo]', 'info', 'render', 'thumbnail fallback used', {
+        videoId: safeState.videoId
+      });
+    }
+  }
+
+  getThumbnailUrl(state = {}) {
+    const videoId = state.videoId;
+    
+    if (videoId && !this.isGenericImage(state.thumbnailUrl)) {
+      const url = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      this.addDebugLog('[CurrentVideo]', 'info', 'getThumbnailUrl', 'using videoId', { videoId });
+      return url;
     }
     
-    // Remove the time display line since user doesn't want it
-    // if (state.duration && state.currentTime && this.buttons.videoDetails) {
-    //   const current = this.formatTime(state.currentTime);
-    //   const total = this.formatTime(state.duration);
-    //   this.buttons.videoDetails.textContent = `${current} / ${total}`;
-    // }
+    if (state.thumbnailUrl && !this.isGenericImage(state.thumbnailUrl)) {
+      this.addDebugLog('[CurrentVideo]', 'info', 'getThumbnailUrl', 'using meta thumbnail', { url: state.thumbnailUrl });
+      return state.thumbnailUrl;
+    }
+    
+    if (videoId) {
+      const url = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      this.addDebugLog('[CurrentVideo]', 'info', 'getThumbnailUrl', 'fallback to videoId', { videoId });
+      return url;
+    }
+    
+    return '';
+  }
+
+  isGenericImage(url) {
+    if (!url) return true;
+    const generic = ['yt_1200', '/img/desktop/', '/img/', 'logo', 'youtube.com/img'];
+    return generic.some(pattern => url.toLowerCase().includes(pattern));
+  }
+
+  setupThumbnailFallback(imgElement, videoId) {
+    if (!imgElement) return;
+
+    let fallbackAttempts = ['hqdefault', 'mqdefault', 'default'];
+    let currentAttempt = 0;
+
+    imgElement.onerror = () => {
+      currentAttempt++;
+      if (currentAttempt < fallbackAttempts.length && videoId) {
+        const quality = fallbackAttempts[currentAttempt];
+        imgElement.src = `https://i.ytimg.com/vi/${videoId}/${quality}.jpg`;
+        this.addDebugLog('[CurrentVideo]', 'info', 'thumbnail', 'trying fallback quality', { quality, videoId });
+      } else {
+        imgElement.style.display = 'none';
+        if (this.buttons.currentVideoThumbnailPlaceholder) {
+          this.buttons.currentVideoThumbnailPlaceholder.style.display = 'flex';
+        }
+        this.addDebugLog('[CurrentVideo]', 'warn', 'thumbnail', 'all fallbacks exhausted', { videoId });
+      }
+    };
+  }
+
+  async seekTo(time) {
+    if (!this.activeTabId) return;
+    try {
+      const response = await browser.tabs.sendMessage(this.activeTabId, {
+        action: 'seekTo',
+        time: Math.max(0, time)
+      });
+      if (this.isSuccessfulResponse(response)) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await this.updatePlayerState();
+      }
+    } catch (e) {
+      console.log('[Seek] error:', e.message);
+    }
+  }
+
+  async focusControlledTab() {
+    if (!this.activeTabId) {
+      this.showStatus('No video selected', 'warning');
+      this.addDebugLog('[CurrentVideo]', 'info', 'focusTab', 'focus tab clicked', { success: false, reason: 'no active tab' });
+      return;
+    }
+
+    console.log('[CurrentVideo] focus tab clicked');
+    this.addDebugLog('[CurrentVideo]', 'info', 'focusTab', 'focus tab clicked', { tabId: this.activeTabId });
+
+    try {
+      const tab = await browser.tabs.get(this.activeTabId);
+      await browser.tabs.update(tab.id, { active: true });
+      if (tab.windowId !== undefined) {
+        await browser.windows.update(tab.windowId, { focused: true });
+      }
+      console.log('[CurrentVideo] focus tab success');
+      this.addDebugLog('[CurrentVideo]', 'info', 'focusTab', 'focus tab success', { tabId: tab.id, windowId: tab.windowId });
+    } catch (error) {
+      console.log('[CurrentVideo] focus tab failure', error.message);
+      this.addDebugLog('[CurrentVideo]', 'error', 'focusTab', 'focus tab failure', { error: error.message });
+      this.showStatus('Unable to focus tab', 'error');
+    }
+  }
+
+  async openCurrentVideo() {
+    const state = this.videoInfo || {};
+    const url = state.url;
+
+    console.log('[CurrentVideo] open video clicked');
+    this.addDebugLog('[CurrentVideo]', 'info', 'openVideo', 'open video clicked', {
+      videoId: state.videoId,
+      url
+    });
+
+    if (!url) {
+      this.showStatus('No video selected', 'warning');
+      this.addDebugLog('[CurrentVideo]', 'info', 'openVideo', 'open video failure', { reason: 'missing url' });
+      return;
+    }
+
+    try {
+      const existingTab = this.activeTabId ? await browser.tabs.get(this.activeTabId).catch(() => null) : null;
+      if (existingTab && existingTab.url && state.videoId && existingTab.url.includes(state.videoId)) {
+        await browser.tabs.update(existingTab.id, { active: true });
+        if (existingTab.windowId !== undefined) {
+          await browser.windows.update(existingTab.windowId, { focused: true });
+        }
+        console.log('[CurrentVideo] open video success (focused existing tab)');
+        this.addDebugLog('[CurrentVideo]', 'info', 'openVideo', 'open video success', {
+          mode: 'focus-existing',
+          tabId: existingTab.id
+        });
+        return;
+      }
+
+      const createdTab = await browser.tabs.create({ url, active: true });
+      if (createdTab?.id) {
+        this.activeTabId = createdTab.id;
+      }
+      console.log('[CurrentVideo] open video success (new tab)');
+      this.addDebugLog('[CurrentVideo]', 'info', 'openVideo', 'open video success', {
+        mode: 'new-tab',
+        tabId: createdTab?.id,
+        url
+      });
+    } catch (error) {
+      console.log('[CurrentVideo] open video failure', error.message);
+      this.addDebugLog('[CurrentVideo]', 'error', 'openVideo', 'open video failure', { error: error.message, url });
+      this.showStatus('Unable to open video', 'error');
+    }
   }
 
   formatTime(seconds) {
@@ -2099,8 +2344,6 @@ class PopupController {
 
       // Update status indicator with connection info
       this.updateStatusIndicator('Auto-connected to YouTube', 'success');
-      
-      // Show video info section
       if (this.buttons.videoInfo) {
         this.buttons.videoInfo.style.display = 'block';
       }
@@ -2128,11 +2371,11 @@ class PopupController {
 
       // Update status indicator
       this.updateStatusIndicator('Searching for YouTube tabs...', 'warning');
-      
-      // Hide video info section
       if (this.buttons.videoInfo) {
-        this.buttons.videoInfo.style.display = 'none';
+        this.buttons.videoInfo.style.display = 'block';
       }
+      this.videoInfo = {};
+      this.updateCurrentVideoCard(null);
     }
   }
 
