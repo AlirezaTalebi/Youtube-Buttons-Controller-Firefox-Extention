@@ -33,6 +33,10 @@ Firefox extension for controlling YouTube playback from the popup and keyboard s
 
 ## Install in Firefox
 
+[Install from Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/youtube-button-controller/)
+
+Or install locally for development:
+
 1. Open Firefox and go to `about:debugging`
 2. Click `This Firefox`
 3. Click `Load Temporary Add-on`
