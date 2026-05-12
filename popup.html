@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Controller v2.0</title>
+    <title>YouTube Controller v2.3.0</title>
     <style>
         /* Base Styles */
         * {
@@ -59,33 +59,81 @@
             margin-bottom: 8px;
         }
 
-        .theme-toggle {
+        .theme-switcher {
             position: absolute;
             top: 15px;
             right: 15px;
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            border-radius: 50%;
-            width: 35px;
-            height: 35px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .theme-toggle {
+            display: inline-grid;
+            grid-template-columns: 1fr 26px 1fr;
+            align-items: center;
+            gap: 7px;
+            min-height: 32px;
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface-muted);
+            color: var(--text-muted);
+            cursor: pointer;
             transition: all 0.3s ease;
         }
 
-        .light-mode .theme-toggle {
-            background: rgba(100, 149, 237, 0.3);
-        }
-
-        .dark-mode .theme-toggle {
-            background: rgba(100, 149, 237, 0.2);
-        }
-
         .theme-toggle:hover {
-            transform: scale(1.1);
+            border-color: var(--primary);
+            color: var(--text);
+        }
+
+        .theme-toggle:focus-visible {
+            outline: 2px solid var(--focus);
+            outline-offset: 2px;
+        }
+
+        .theme-toggle .theme-option {
+            font-size: 11px;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+
+        .theme-toggle .theme-switch-track {
+            position: relative;
+            width: 26px;
+            height: 16px;
+            border-radius: 999px;
+            background: var(--border);
+            transition: background 0.2s ease;
+        }
+
+        .theme-toggle .theme-switch-thumb {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+            transition: transform 0.2s ease;
+        }
+
+        .theme-toggle.is-dark .theme-switch-track {
+            background: var(--primary);
+        }
+
+        .theme-toggle.is-dark .theme-switch-thumb {
+            transform: translateX(10px);
+        }
+
+        .theme-toggle.is-light .theme-option-light,
+        .theme-toggle.is-dark .theme-option-dark {
+            color: var(--text);
         }
 
         /* Container */
@@ -270,7 +318,7 @@
             transition: all 0.2s ease;
         }
 
-        .seek-bar::-webkit-slider-thumb:hover {
+        .seek-bar:hover::-webkit-slider-thumb {
             transform: scale(1.2);
             box-shadow: 0 3px 10px rgba(100, 149, 237, 0.4);
         }
@@ -423,6 +471,58 @@
         .speed-btn.active {
             background: linear-gradient(45deg, #6495ed, #4169e1);
             color: white;
+        }
+
+        /* Profiles Section */
+        .profiles-section {
+            margin-bottom: 20px;
+        }
+
+        .profile-controls {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .profile-btn {
+            padding: 8px 6px;
+            border: none;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 36px;
+        }
+
+        .light-mode .profile-btn {
+            background: rgba(255, 255, 255, 0.25);
+            color: #333;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .dark-mode .profile-btn {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .profile-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        .profile-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .profile-status {
+            min-height: 15px;
+            margin-top: 8px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 600;
+            opacity: 0.9;
         }
 
         /* Advanced Toggles */
@@ -663,19 +763,539 @@
             border: none;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
         }
+
+        /* Stats Panel Styling */
+        .light-mode #statsPanel {
+            background: rgba(100, 149, 237, 0.1);
+            border: 1px solid rgba(100, 149, 237, 0.2);
+            color: #333;
+        }
+
+        .dark-mode #statsPanel {
+            background: rgba(100, 149, 237, 0.15);
+            border: 1px solid rgba(100, 149, 237, 0.3);
+            color: #e0e0e0;
+        }
+
+        /* Sleep Timer Display */
+        .light-mode #sleepTimerDisplay {
+            color: #6495ed;
+        }
+
+        .dark-mode #sleepTimerDisplay {
+            color: #87ceeb;
+        }
+
+        #sleepCountdown {
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        /* Notification Toast */
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            animation: slideIn 0.3s ease;
+            z-index: 999;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-notification.success {
+            background: #4caf50;
+            color: white;
+        }
+
+        .toast-notification.info {
+            background: #2196F3;
+            color: white;
+        }
+
+        /* Professional refresh */
+        body {
+            width: 390px;
+            min-height: 560px;
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+
+        body.dark-mode {
+            background: #111827;
+            color: #f9fafb;
+        }
+
+        body.light-mode {
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+
+        .header {
+            padding: 14px 16px;
+            border-radius: 0;
+            text-align: left;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 16px;
+            letter-spacing: 0;
+        }
+
+        .header small {
+            display: none;
+        }
+
+        .theme-switcher {
+            top: 10px;
+            right: 12px;
+        }
+
+        .theme-toggle {
+            min-height: 30px;
+            padding: 4px 7px;
+        }
+
+        .container {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .status-section,
+        .connection-section,
+        .video-info,
+        .control-grid,
+        .volume-section,
+        .speed-section,
+        .profiles-section,
+        .advanced-section,
+        .settings-section,
+        .help-section {
+            margin-bottom: 0;
+        }
+
+        .video-info,
+        .volume-section,
+        .speed-section,
+        .profiles-section,
+        .advanced-section,
+        .settings-section,
+        .help-section {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        .light-mode .video-info,
+        .light-mode .volume-section,
+        .light-mode .speed-section,
+        .light-mode .profiles-section,
+        .light-mode .advanced-section,
+        .light-mode .settings-section,
+        .light-mode .help-section {
+            background: #ffffff;
+        }
+
+        .dark-mode .video-info,
+        .dark-mode .volume-section,
+        .dark-mode .speed-section,
+        .dark-mode .profiles-section,
+        .dark-mode .advanced-section,
+        .dark-mode .settings-section,
+        .dark-mode .help-section {
+            background: #1f2937;
+            border-color: rgba(148, 163, 184, 0.22);
+        }
+
+        .status-indicator {
+            padding: 9px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: left;
+        }
+
+        .get-tab-btn,
+        .settings-btn,
+        .help-toggle {
+            width: 100%;
+            min-height: 36px;
+            padding: 9px 10px;
+            border-radius: 7px;
+            border: 1px solid transparent;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .get-tab-btn.primary,
+        .light-mode .get-tab-btn,
+        .dark-mode .get-tab-btn {
+            background: #dc2626;
+            color: #ffffff;
+            border-color: #b91c1c;
+        }
+
+        .settings-btn,
+        .help-toggle {
+            background: transparent;
+        }
+
+        .light-mode .settings-btn,
+        .light-mode .help-toggle {
+            color: #1f2937;
+            border-color: rgba(148, 163, 184, 0.45);
+        }
+
+        .dark-mode .settings-btn,
+        .dark-mode .help-toggle {
+            color: #f9fafb;
+            border-color: rgba(148, 163, 184, 0.35);
+        }
+
+        .control-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .control-btn,
+        .toggle-btn,
+        .profile-btn,
+        .speed-btn,
+        .volume-btn {
+            border-radius: 7px;
+            box-shadow: none;
+        }
+
+        .control-btn {
+            min-height: 58px;
+            padding: 9px 6px;
+        }
+
+        .control-btn:hover:not(:disabled),
+        .get-tab-btn:hover,
+        .profile-btn:hover:not(:disabled),
+        .speed-btn:hover:not(:disabled),
+        .toggle-btn:hover:not(:disabled) {
+            transform: none;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+        }
+
+        .section-title {
+            margin-bottom: 9px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0;
+            color: #64748b;
+        }
+
+        .speed-controls,
+        .profile-controls {
+            gap: 6px;
+        }
+
+        .profile-btn {
+            min-height: 34px;
+        }
+
+        .toggle-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .help-panel {
+            margin-top: 10px;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .help-panel[hidden] {
+            display: none;
+        }
+
+        .help-topic {
+            padding-top: 9px;
+            border-top: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        .help-topic:first-child {
+            padding-top: 0;
+            border-top: 0;
+        }
+
+        .help-topic h3 {
+            margin: 0 0 5px;
+            font-size: 12px;
+        }
+
+        .help-topic ul {
+            margin: 0 0 9px 16px;
+        }
+
+        .help-topic li {
+            margin-bottom: 4px;
+        }
+
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --surface-muted: #eef2f7;
+            --text: #111827;
+            --text-muted: #64748b;
+            --border: #cbd5e1;
+            --primary: #dc2626;
+            --primary-hover: #b91c1c;
+            --success: #15803d;
+            --warning: #b45309;
+            --danger: #b91c1c;
+            --focus: #2563eb;
+        }
+
+        body.theme-dark {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface-muted: #334155;
+            --text: #f8fafc;
+            --text-muted: #cbd5e1;
+            --border: #475569;
+            --primary: #ef4444;
+            --primary-hover: #f87171;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #f87171;
+            --focus: #93c5fd;
+        }
+
+        body.theme-light,
+        body.theme-dark {
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .theme-light .header,
+        .theme-dark .header,
+        .theme-light .status-indicator,
+        .theme-dark .status-indicator,
+        .theme-light .video-info,
+        .theme-dark .video-info,
+        .theme-light .volume-section,
+        .theme-dark .volume-section,
+        .theme-light .speed-section,
+        .theme-dark .speed-section,
+        .theme-light .profiles-section,
+        .theme-dark .profiles-section,
+        .theme-light .resume-section,
+        .theme-dark .resume-section,
+        .theme-light .advanced-section,
+        .theme-dark .advanced-section,
+        .theme-light .settings-section,
+        .theme-dark .settings-section,
+        .theme-light .help-section {
+            background: var(--surface);
+            color: var(--text);
+            border-color: var(--border);
+        }
+
+        .resume-section {
+            margin-bottom: 0;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .resume-search {
+            width: 100%;
+            min-height: 32px;
+            margin-bottom: 8px;
+            padding: 7px 9px;
+            border-radius: 7px;
+            border: 1px solid var(--border);
+            background: var(--surface-muted);
+            color: var(--text);
+            font-size: 12px;
+        }
+
+        .resume-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 190px;
+            overflow-y: auto;
+        }
+
+        .resume-entry {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-muted);
+            color: var(--text);
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .resume-title,
+        .resume-meta {
+            display: block;
+        }
+
+        .resume-title {
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+
+        .resume-meta,
+        .resume-status,
+        .profile-status {
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        button,
+        input,
+        select {
+            font-family: inherit;
+        }
+
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible {
+            outline: 2px solid var(--focus);
+            outline-offset: 2px;
+        }
+
+        .theme-light .control-btn,
+        .theme-dark .control-btn,
+        .theme-light .toggle-btn,
+        .theme-dark .toggle-btn,
+        .theme-light .profile-btn,
+        .theme-dark .profile-btn,
+        .theme-light .speed-btn,
+        .theme-dark .speed-btn,
+        .theme-light .volume-btn,
+        .theme-dark .volume-btn,
+        .theme-light .settings-btn,
+        .theme-dark .settings-btn,
+        .theme-light .help-toggle,
+        .theme-dark .help-toggle,
+        .theme-light .layout-select,
+        .theme-dark .layout-select {
+            background: var(--surface-muted);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .theme-light .get-tab-btn,
+        .theme-dark .get-tab-btn,
+        .theme-light .get-tab-btn.primary,
+        .theme-dark .get-tab-btn.primary,
+        .theme-light .speed-btn.active,
+        .theme-dark .speed-btn.active,
+        .theme-light .toggle-btn.active,
+        .theme-dark .toggle-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary-hover);
+        }
+
+        .theme-light .section-title,
+        .theme-dark .section-title {
+            color: var(--text-muted);
+        }
+
+        body.popup-size-compact {
+            width: 340px;
+        }
+
+        body.popup-size-normal {
+            width: 390px;
+        }
+
+        body.popup-size-wide {
+            width: 480px;
+        }
+
+        body.popup-size-compact .container {
+            padding: 10px;
+            gap: 8px;
+        }
+
+        body.popup-size-compact .speed-controls {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        body.popup-size-wide .profile-controls {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .layout-section {
+            margin-bottom: 0;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .layout-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .layout-field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .layout-select {
+            min-height: 34px;
+            padding: 7px 8px;
+            border-radius: 7px;
+        }
+
     </style>
 </head>
-<body class="light-mode">
+<body class="theme-light light-mode popup-size-normal">
     <div class="header">
         <h1>YouTube Controller</h1>
         <div style="margin-top: 5px;">
             <small style="color: #888; font-size: 10px;">
                 <a href="https://github.com/AlirezaTalebi/Youtube-Buttons-Controller-Firefox-Extention" target="_blank" style="color: #6495ed; text-decoration: none;">
-                    🐛 Report Issues • 💡 Suggestions • GitHub
+                    Report Issues - Suggestions - GitHub
                 </a>
             </small>
         </div>
-        <button id="darkModeToggle" class="theme-toggle" title="Toggle dark mode">🌙</button>
+        <div class="theme-switcher" aria-label="Theme">
+            <span>Theme</span>
+            <button id="darkModeToggle" class="theme-toggle" type="button" aria-pressed="true" title="Switch theme">
+                <span class="theme-option theme-option-light">Light</span>
+                <span class="theme-switch-track" aria-hidden="true">
+                    <span class="theme-switch-thumb"></span>
+                </span>
+                <span class="theme-option theme-option-dark">Dark</span>
+            </button>
+        </div>
     </div>
 
     <div class="container">
@@ -691,6 +1311,23 @@
             <button id="getTabButton" class="get-tab-btn">
                 Find YouTube Tab
             </button>
+        </div>
+
+        <!-- Layout Section -->
+        <div class="layout-section">
+            <div class="section-title">
+                <span>Layout</span>
+            </div>
+            <div class="layout-row">
+                <label class="layout-field" for="popupSizeSelect">
+                    <span>Popup Size</span>
+                    <select id="popupSizeSelect" class="layout-select">
+                        <option value="compact">Compact</option>
+                        <option value="normal">Normal</option>
+                        <option value="wide">Wide</option>
+                    </select>
+                </label>
+            </div>
         </div>
 
         <!-- Video Info Section -->
@@ -710,19 +1347,19 @@
         <!-- Main Controls -->
         <div class="control-grid">
             <button id="backButton" class="control-btn">
-                <span class="icon">⏮️</span>
+                <span class="icon">|&lt;</span>
                 <span>Previous</span>
             </button>
             <button id="stopButton" class="control-btn">
-                <span class="icon">▶️</span>
+                <span class="icon">&gt;</span>
                 <span>Play</span>
             </button>
             <button id="nextButton" class="control-btn">
-                <span class="icon">⏭️</span>
+                <span class="icon">&gt;|</span>
                 <span>Next</span>
             </button>
             <button id="muteButton" class="control-btn">
-                <span class="icon">🔊</span>
+                <span class="icon">M</span>
                 <span>Mute</span>
             </button>
         </div>
@@ -755,20 +1392,74 @@
             </div>
         </div>
 
+        <!-- Profiles Section -->
+        <div class="profiles-section">
+            <div class="section-title">
+                <span>Profiles</span>
+            </div>
+            <div class="profile-controls">
+                <button id="saveChannelProfile" class="profile-btn">Save Channel</button>
+                <button id="clearChannelProfile" class="profile-btn">Clear Channel</button>
+                <button id="saveGlobalProfile" class="profile-btn">Save Global</button>
+                <button id="applyGlobalProfile" class="profile-btn">Apply Global</button>
+            </div>
+            <div id="profileStatus" class="profile-status"></div>
+        </div>
+
+        <!-- Resume Section -->
+        <div class="resume-section">
+            <div class="section-title">
+                <span>Resume</span>
+            </div>
+            <input id="resumeSearch" class="resume-search" type="search" placeholder="Search history">
+            <div id="resumeList" class="resume-list"></div>
+            <div id="resumeStatus" class="resume-status">No saved videos yet</div>
+        </div>
+
         <!-- Advanced Toggles -->
         <div class="advanced-section">
             <div class="section-title">
                 <span>Advanced Features</span>
             </div>
             <div class="toggle-grid">
-                <button id="theaterToggle" class="toggle-btn">
-                    <span class="icon">🎭</span>
-                    <span>Theater</span>
-                </button>
                 <button id="autoPauseToggle" class="toggle-btn">
-                    <span class="icon">⏸️</span>
+                    <span class="icon">AP</span>
                     <span>Auto-Pause</span>
                 </button>
+                <button id="captionsToggle" class="toggle-btn">
+                    <span class="icon">CC</span>
+                    <span>Captions</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Sleep Timer Section -->
+        <div class="advanced-section">
+            <div class="section-title">
+                <span>Sleep Timer</span>
+            </div>
+            <div class="speed-controls" style="justify-content: space-between;">
+                <button class="speed-btn" data-sleep="5">5 min</button>
+                <button class="speed-btn" data-sleep="10">10 min</button>
+                <button class="speed-btn" data-sleep="15">15 min</button>
+                <button class="speed-btn" data-sleep="30">30 min</button>
+                <button id="cancelSleepBtn" class="speed-btn" style="flex: 1; margin-left: 8px; display: none;">Cancel</button>
+            </div>
+            <div id="sleepTimerDisplay" style="text-align: center; margin-top: 8px; font-size: 12px; font-weight: 600; display: none;">
+                Sleep in: <span id="sleepCountdown">0:00</span>
+            </div>
+        </div>
+
+        <!-- Video Stats Section -->
+        <div class="advanced-section">
+            <div class="section-title">
+                <span>Video Stats</span>
+            </div>
+            <div id="statsPanel" style="font-size: 11px; line-height: 1.6; padding: 10px; border-radius: 8px; display: none; font-family: 'Courier New', monospace;">
+                <div><strong>Duration:</strong> <span id="statsDuration">--:--</span></div>
+                <div><strong>Progress:</strong> <span id="statsProgress">0%</span></div>
+                <div><strong>Bitrate:</strong> <span id="statsBitrate">N/A</span></div>
+                <div><strong>Resolution:</strong> <span id="statsResolution">N/A</span></div>
             </div>
         </div>
 
@@ -778,8 +1469,18 @@
                 Settings
             </button>
         </div>
+
+        <!-- Help Section -->
+        <div class="help-section">
+            <button id="helpToggle" class="help-toggle" aria-expanded="false">
+                Help / Usage
+            </button>
+            <div id="helpPanel" class="help-panel" hidden>
+                <div id="helpContent" class="help-content"></div>
+            </div>
+        </div>
     </div>
 
-    <script src="popup.js"></script>
+<script src="popup.js"></script>
 </body>
 </html>

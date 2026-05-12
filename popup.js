@@ -1,5 +1,5 @@
 /**
- * YouTube Button Controller - Enhanced Popup Script v2.0
+ * YouTube Button Controller - Enhanced Popup Script v2.3.0
  * Advanced YouTube controller with volume, speed, and smart features
  * 
  * Author: Alireza Talebi
@@ -9,6 +9,49 @@
  * This software is free to use, share, modify, and distribute under GPL-3.0.
  * Report issues and contribute at: https://github.com/AlirezaTalebi/Youtube-Buttons-Controller-Firefox-Extention
  */
+
+const HELP_TOPICS = [
+  {
+    title: 'Basic Controls',
+    items: [
+      'Play/Pause controls the current YouTube video.',
+      'Mute toggles video sound.',
+      'Speed and volume controls change the active video.'
+    ]
+  },
+  {
+    title: 'Auto-pause on Tab Switch',
+    items: [
+      'Enable this in Settings.',
+      'When you leave a playing YouTube tab, the extension pauses the old tab.',
+      'It does not resume videos automatically.'
+    ]
+  },
+  {
+    title: 'Settings Profiles',
+    items: [
+      'Save Channel Profile stores speed, volume, and mute for the current channel.',
+      'Clear Channel Profile removes the saved profile for this channel.',
+      'Save Global Default stores a fallback profile for channels without their own profile.',
+      'Apply Global Default applies the global speed, volume, and mute immediately.'
+    ]
+  },
+  {
+    title: 'Debug Logs',
+    items: [
+      'Logs are stored under ytControllerDebugLog.',
+      'Read logs with: await browser.storage.local.get("ytControllerDebugLog")',
+      'Clear logs with: await browser.storage.local.remove("ytControllerDebugLog")'
+    ]
+  }
+];
+
+const WATCH_HISTORY_KEY = 'ytControllerWatchHistory';
+const WATCH_HISTORY_LIMIT = 300;
+const WATCH_HISTORY_VISIBLE_LIMIT = 10;
+const WATCH_HISTORY_SAVE_INTERVAL = 12000;
+const POPUP_SIZE_KEY = 'ytControllerPopupSize';
+const POPUP_SIZE_VALUES = ['compact', 'normal', 'wide'];
 
 class PopupController {
   constructor() {
@@ -20,24 +63,37 @@ class PopupController {
     this.videoInfo = {};
     this.settings = {
       autoPause: false,
-      theaterMode: false,
-      autoDetect: true,  // New setting for auto-detection
-      darkMode: true     // Default to dark mode
+      autoDetect: true,
+      darkMode: true
     };
     this.autoDetectInterval = null;
     this.updateInterval = null;
+    this.sleepTimerId = null;
+    this.sleepCountdownInterval = null;
+    this.statsUpdateInterval = null;
+    this.historySaveInterval = null;
+    this.watchHistory = [];
+    this.historySearchTerm = '';
+    this.popupSize = 'normal';
+    this.updateFailureCount = 0;
+    this.maxUpdateFailures = 3;
     this.init();
   }
 
   async init() {
+    this.addDebugLog('[Popup]', 'info', 'init', 'popup opened');
     // Cache button references
     this.cacheButtons();
     
     // Setup event listeners
     this.setupEventListeners();
+    this.renderHelpTopics();
     
     // Load saved settings
     await this.loadSettings();
+    await this.loadPopupSize();
+    this.applyTheme();
+    await this.loadWatchHistory();
     
     // Load saved tab or detect current tab
     await this.loadActiveTab();
@@ -61,20 +117,34 @@ class PopupController {
       }, 50); // Reduced delay for faster response
     }
 
-    // Start continuous time updates
-    this.startTimeUpdates();
+    this.startHistoryTracking();
+  }
 
-    // Apply dark mode if enabled
-    this.applyTheme();
+  async addDebugLog(scope, level, action, message, data = {}) {
+    try {
+      const { ytControllerDebugLog = [] } = await browser.storage.local.get('ytControllerDebugLog');
+      const logs = Array.isArray(ytControllerDebugLog) ? ytControllerDebugLog : [];
+      logs.push({ time: new Date().toISOString(), scope, level, action, message, data });
+      if (logs.length > 150) logs.shift();
+      await browser.storage.local.set({ ytControllerDebugLog: logs });
+    } catch (e) {
+      console.error('[DebugLog] Storage error:', e);
+    }
   }
 
   cacheButtons() {
     const buttonIds = [
       'nextButton', 'stopButton', 'backButton', 'muteButton', 'getTabButton',
       'volumeSlider', 'volumeUp', 'volumeDown', 'volumeValue',
-      'theaterToggle', 'autoPauseToggle', 'settingsButton',
+      'autoPauseToggle', 'captionsToggle', 'settingsButton',
       'statusIndicator', 'videoInfo', 'videoTitle',
-      'darkModeToggle', 'seekBar', 'currentTimeDisplay', 'durationDisplay'
+      'darkModeToggle', 'seekBar', 'currentTimeDisplay', 'durationDisplay',
+      'cancelSleepBtn', 'sleepTimerDisplay', 'sleepCountdown',
+      'statsPanel', 'statsDuration', 'statsProgress', 'statsBitrate', 'statsResolution',
+      'saveChannelProfile', 'clearChannelProfile', 'saveGlobalProfile', 'applyGlobalProfile',
+      'profileStatus', 'resumeSearch', 'resumeList', 'resumeStatus',
+      'popupSizeSelect',
+      'helpToggle', 'helpPanel', 'helpContent'
     ];
     
     buttonIds.forEach(id => {
@@ -86,6 +156,9 @@ class PopupController {
 
     // Cache speed buttons
     this.speedButtons = document.querySelectorAll('[data-speed]');
+    
+    // Cache sleep timer buttons
+    this.sleepButtons = document.querySelectorAll('[data-sleep]');
   }
 
   setupEventListeners() {
@@ -140,17 +213,60 @@ class PopupController {
       });
     });
 
-    // Advanced toggles
-    this.buttons.theaterToggle?.addEventListener('click', () => {
-      this.toggleTheaterMode();
+    // Profile controls
+    this.buttons.saveChannelProfile?.addEventListener('click', () => {
+      this.saveChannelProfile();
     });
 
+    this.buttons.clearChannelProfile?.addEventListener('click', () => {
+      this.clearChannelProfile();
+    });
+
+    this.buttons.saveGlobalProfile?.addEventListener('click', () => {
+      this.saveGlobalProfile();
+    });
+
+    this.buttons.applyGlobalProfile?.addEventListener('click', () => {
+      this.applyGlobalProfile();
+    });
+
+    this.buttons.resumeSearch?.addEventListener('input', (event) => {
+      this.historySearchTerm = event.target.value.trim().toLowerCase();
+      this.addDebugLog('[History]', 'info', 'search', 'search', { query: this.historySearchTerm });
+      this.renderResumeList();
+    });
+
+    this.buttons.popupSizeSelect?.addEventListener('change', (event) => {
+      this.setPopupSize(event.target.value);
+    });
+
+    // Advanced toggles
     this.buttons.autoPauseToggle?.addEventListener('click', () => {
       this.toggleAutoPause();
     });
 
+    this.buttons.captionsToggle?.addEventListener('click', () => {
+      this.sendCommand('toggleCaptions');
+    });
+
+    // Sleep timer buttons
+    this.sleepButtons?.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const minutes = parseInt(e.target.dataset.sleep);
+        this.startSleepTimer(minutes);
+      });
+    });
+
+    this.buttons.cancelSleepBtn?.addEventListener('click', () => {
+      this.cancelSleepTimer();
+    });
+
     this.buttons.settingsButton?.addEventListener('click', () => {
       this.openSettings();
+    });
+
+    this.buttons.helpToggle?.addEventListener('click', () => {
+      this.toggleHelp();
     });
 
     // Dark mode toggle
@@ -177,8 +293,79 @@ class PopupController {
       this.handleBackgroundMessage(message);
     });
 
-    // Load saved settings
-    this.loadSettings();
+  }
+
+  renderHelpTopics() {
+    if (!this.buttons.helpContent) return;
+
+    this.buttons.helpContent.textContent = '';
+    HELP_TOPICS.forEach(topic => {
+      const topicEl = document.createElement('section');
+      topicEl.className = 'help-topic';
+
+      const titleEl = document.createElement('h3');
+      titleEl.textContent = topic.title;
+      topicEl.appendChild(titleEl);
+
+      const listEl = document.createElement('ul');
+      topic.items.forEach(item => {
+        const itemEl = document.createElement('li');
+        itemEl.textContent = item;
+        listEl.appendChild(itemEl);
+      });
+
+      topicEl.appendChild(listEl);
+      this.buttons.helpContent.appendChild(topicEl);
+    });
+  }
+
+  toggleHelp() {
+    if (!this.buttons.helpPanel || !this.buttons.helpToggle) return;
+
+    const isHidden = this.buttons.helpPanel.hidden;
+    this.buttons.helpPanel.hidden = !isHidden;
+    this.buttons.helpToggle.setAttribute('aria-expanded', String(isHidden));
+    this.buttons.helpToggle.textContent = isHidden ? 'Hide Help' : 'Help / Usage';
+
+    if (isHidden) {
+      console.log('[Help] opened');
+      this.addDebugLog('[Help]', 'info', 'toggleHelp', 'opened');
+    }
+  }
+
+  normalizePopupSize(value) {
+    return POPUP_SIZE_VALUES.includes(value) ? value : 'normal';
+  }
+
+  async loadPopupSize() {
+    try {
+      const result = await browser.storage.local.get(POPUP_SIZE_KEY);
+      this.popupSize = this.normalizePopupSize(result[POPUP_SIZE_KEY]);
+      this.addDebugLog('[Layout]', 'info', 'popupSize', 'popup size loaded', { size: this.popupSize });
+      this.applyPopupSize(this.popupSize);
+    } catch (error) {
+      this.popupSize = 'normal';
+      this.addDebugLog('[Layout]', 'warn', 'popupSize', 'popup size loaded', { size: this.popupSize, error: error.message });
+      this.applyPopupSize(this.popupSize);
+    }
+  }
+
+  async setPopupSize(size) {
+    const nextSize = this.normalizePopupSize(size);
+    this.popupSize = nextSize;
+    await browser.storage.local.set({ [POPUP_SIZE_KEY]: nextSize });
+    this.addDebugLog('[Layout]', 'info', 'popupSize', 'popup size changed', { size: nextSize });
+    this.applyPopupSize(nextSize);
+  }
+
+  applyPopupSize(size) {
+    const normalized = this.normalizePopupSize(size);
+    document.body.classList.remove('popup-size-compact', 'popup-size-normal', 'popup-size-wide');
+    document.body.classList.add(`popup-size-${normalized}`);
+    if (this.buttons.popupSizeSelect) {
+      this.buttons.popupSizeSelect.value = normalized;
+    }
+    this.addDebugLog('[Layout]', 'info', 'popupSize', 'popup size applied', { size: normalized });
   }
 
   async loadActiveTab() {
@@ -268,8 +455,9 @@ class PopupController {
         });
         
         console.log('Popup: Tab response:', response);
-        if (response && response.success && response.state && response.state.isValidPage && 
-            response.state.isReady && response.state.isPlaying) {
+        const ok = this.isSuccessfulResponse(response);
+        const state = this.getResponseResult(response);
+        if (ok && state && state.isValidPage && state.isReady && state.isPlaying) {
           console.log('Popup: Found playing tab:', tab.id);
           return tab;
         }
@@ -286,115 +474,36 @@ class PopupController {
   async testAndConnectToTab(tabId, message) {
     console.log('Popup: Testing connection to tab', tabId, '-', message);
     try {
-      // Test if content script is responding
-      const response = await browser.tabs.sendMessage(tabId, { 
-        action: 'getPlayerState' 
-      });
+      // First, ping to verify content script is alive
+      const pingResponse = await browser.tabs.sendMessage(tabId, { action: 'ping' });
       
-      console.log('Popup: Tab response:', response);
-      
-      if (response && response.success && response.state && response.state.isValidPage) {
+      if (this.isSuccessfulResponse(pingResponse) && pingResponse.source === 'content') {
+        console.log('Popup: Ping successful, content script is alive');
+        this.addDebugLog('[Popup]', 'info', 'ping', 'ping success', { tabId });
         this.activeTabId = tabId;
         this.isYouTubeTab = true;
-        console.log('Popup: Successfully connected to tab', tabId);
+        this.updateFailureCount = 0;
         await browser.storage.local.set({ activeTabId: tabId });
-        await this.updatePlayerState();
         this.showStatus(message, 'success');
         this.updateUI();
-      } else {
-        // Page might not be ready, retry with longer delay
-        console.log('Popup: Tab not ready, will retry with longer delay');
-        setTimeout(async () => {
-          try {
-            const retryResponse = await browser.tabs.sendMessage(tabId, { 
-              action: 'getPlayerState' 
-            });
-            
-            if (retryResponse && retryResponse.success && retryResponse.state && retryResponse.state.isValidPage) {
-              this.activeTabId = tabId;
-              this.isYouTubeTab = true;
-              await browser.storage.local.set({ activeTabId: tabId });
-              await this.updatePlayerState();
-              this.showStatus(message, 'success');
-              this.updateUI();
-            }
-          } catch (retryError) {
-            // Content script not ready yet
-            console.log('Popup: Retry 1 failed, content script may not be loaded yet');
-            // Try one more time with even longer delay
-            setTimeout(async () => {
-              try {
-                const retry2Response = await browser.tabs.sendMessage(tabId, { 
-                  action: 'getPlayerState' 
-                });
-                
-                if (retry2Response && retry2Response.success && retry2Response.state && retry2Response.state.isValidPage) {
-                  this.activeTabId = tabId;
-                  this.isYouTubeTab = true;
-                  await browser.storage.local.set({ activeTabId: tabId });
-                  await this.updatePlayerState();
-                  this.showStatus(message, 'success');
-                  this.updateUI();
-                }
-              } catch (retry2Error) {
-                console.log('Popup: Retry 2 failed - will keep trying in background');
-              }
-            }, 2000);
-          }
-        }, 1500);
+        this.addDebugLog('[Popup]', 'info', 'getPlayerState', 'initial getPlayerState requested', { tabId });
+        await this.updatePlayerState({ initial: true, saveHistory: true });
+        this.startUpdates();
+        return true;
       }
     } catch (error) {
-      // Content script not injected yet
-      console.log('Popup: Content script not responding, will retry:', error.message);
-      
-      // First retry with longer delay
-      setTimeout(async () => {
-        try {
-          const response = await browser.tabs.sendMessage(tabId, { 
-            action: 'getPlayerState' 
-          });
-          
-          if (response && response.success && response.state && response.state.isValidPage) {
-            this.activeTabId = tabId;
-            this.isYouTubeTab = true;
-            await browser.storage.local.set({ activeTabId: tabId });
-            await this.updatePlayerState();
-            this.showStatus(message, 'success');
-            this.updateUI();
-          }
-        } catch (retryError) {
-          console.log('Popup: Retry 1 failed:', retryError.message);
-          
-          // Second retry with even longer delay
-          setTimeout(async () => {
-            try {
-              const response2 = await browser.tabs.sendMessage(tabId, { 
-                action: 'getPlayerState' 
-              });
-              
-              if (response2 && response2.success && response2.state && response2.state.isValidPage) {
-                this.activeTabId = tabId;
-                this.isYouTubeTab = true;
-                await browser.storage.local.set({ activeTabId: tabId });
-                await this.updatePlayerState();
-                this.showStatus(message, 'success');
-                this.updateUI();
-              }
-            } catch (retry2Error) {
-              console.log('Popup: Retry 2 failed:', retry2Error.message);
-              console.log('Popup: Content script still not responding - may be blocked or not injected');
-            }
-          }, 3000);
-        }
-      }, 2000);
+      console.log('Popup: Ping failed:', error.message);
     }
+    
+    this.showStatus('Content script not responding', 'error');
+    return false;
   }
 
   async connectToTab(tabId, message) {
     this.activeTabId = tabId;
     this.isYouTubeTab = true;
     await browser.storage.local.set({ activeTabId: tabId });
-    await this.updatePlayerState();
+    await this.updatePlayerState({ initial: true, saveHistory: true });
     this.showStatus(message, 'success');
     this.updateUI();
   }
@@ -423,11 +532,28 @@ class PopupController {
     }
   }
 
+  startUpdates() {
+    this.startTimeUpdates();
+  }
+
   startTimeUpdates() {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+
     // Update time every second when connected
     this.updateInterval = setInterval(async () => {
       if (this.isYouTubeTab && this.activeTabId && !this.isDragging) {
         await this.updateTimeDisplay();
+        // Update stats every 2 seconds
+        if (Math.random() > 0.5) {
+          await this.updateVideoStats();
+        }
+        // Auto-save position every 5 seconds if enabled
+        if (Math.floor(Date.now() / 5000) % 2 === 0) {
+          await this.savePlaybackPosition();
+        }
       }
     }, 1000);
   }
@@ -439,6 +565,10 @@ class PopupController {
     }
   }
 
+  stopUpdates() {
+    this.stopTimeUpdates();
+  }
+
   async updateTimeDisplay() {
     if (!this.activeTabId) return;
 
@@ -447,8 +577,9 @@ class PopupController {
         action: 'getPlayerState' 
       });
 
-      if (response && response.success && response.state.isReady) {
-        const state = response.state;
+      const ok = this.isSuccessfulResponse(response);
+      const state = this.getResponseResult(response);
+      if (ok && state?.isReady) {
         
         // Update time displays
         if (this.buttons.currentTimeDisplay && state.currentTime !== undefined) {
@@ -487,8 +618,10 @@ class PopupController {
         action: 'getPlayerState' 
       });
 
-      if (response && response.success && response.state.duration) {
-        const seekTime = (percentage / 100) * response.state.duration;
+      const ok = this.isSuccessfulResponse(response);
+      const state = this.getResponseResult(response);
+      if (ok && state?.duration) {
+        const seekTime = (percentage / 100) * state.duration;
         
         await browser.tabs.sendMessage(this.activeTabId, {
           action: 'seekTo',
@@ -504,6 +637,7 @@ class PopupController {
     this.settings.darkMode = !this.settings.darkMode;
     this.applyTheme();
     this.saveSettings();
+    this.addDebugLog('[Settings]', 'info', 'theme', 'theme changed', { darkMode: this.settings.darkMode });
     this.showStatus(`${this.settings.darkMode ? 'Dark' : 'Light'} mode enabled`, 'success');
   }
 
@@ -511,15 +645,20 @@ class PopupController {
     const popup = document.body;
     if (this.settings.darkMode) {
       popup.classList.add('dark-mode');
+      popup.classList.add('theme-dark');
       popup.classList.remove('light-mode');
+      popup.classList.remove('theme-light');
     } else {
       popup.classList.add('light-mode');
+      popup.classList.add('theme-light');
       popup.classList.remove('dark-mode');
+      popup.classList.remove('theme-dark');
     }
 
-    // Update dark mode button
     if (this.buttons.darkModeToggle) {
-      this.buttons.darkModeToggle.textContent = this.settings.darkMode ? '☀️' : '🌙';
+      this.buttons.darkModeToggle.setAttribute('aria-pressed', String(this.settings.darkMode));
+      this.buttons.darkModeToggle.classList.toggle('is-dark', this.settings.darkMode);
+      this.buttons.darkModeToggle.classList.toggle('is-light', !this.settings.darkMode);
       this.buttons.darkModeToggle.title = `Switch to ${this.settings.darkMode ? 'light' : 'dark'} mode`;
     }
   }
@@ -534,7 +673,7 @@ class PopupController {
         action: 'getPlayerState' 
       });
       
-      if (!response || !response.success) {
+      if (!this.isSuccessfulResponse(response)) {
         // Connection lost, restart auto-detection silently
         this.isYouTubeTab = false;
         this.activeTabId = null;
@@ -554,10 +693,10 @@ class PopupController {
         type: 'GET_ACTIVE_TAB' 
       });
 
-      if (response.success) {
+      if (this.isSuccessfulResponse(response)) {
         this.activeTabId = response.tabId;
         this.isYouTubeTab = true;
-        await this.updatePlayerState();
+        await this.updatePlayerState({ initial: true, saveHistory: true });
         this.showStatus('Tab set successfully!', 'success');
       } else {
         this.isYouTubeTab = false;
@@ -577,12 +716,22 @@ class PopupController {
     }
 
     try {
+      console.log('[Popup] Sending command:', command, params);
+      this.addDebugLog('[Popup]', 'info', command, 'command sent', params);
+      this.addDebugLog('[Command]', 'info', command, 'sent', params);
+      
       const response = await browser.tabs.sendMessage(this.activeTabId, { 
         action: command,
         ...params
       });
 
-      if (response && response.success) {
+      console.log('[Popup] Response for', command, ':', response);
+      this.addDebugLog('[Popup]', 'info', command, 'response received', { ok: response?.ok, success: response?.success, error: response?.error });
+
+      const isSuccess = this.isSuccessfulResponse(response);
+      this.logCommandInterpretation(command, response, isSuccess);
+      
+      if (isSuccess) {
         // Update button states based on response
         this.updateButtonStates(command, response.state);
         
@@ -595,8 +744,11 @@ class PopupController {
         if (['clickNext', 'clickBack'].includes(command)) {
           this.showStatus(`${command === 'clickNext' ? 'Next' : 'Previous'} video`, 'success');
         }
+        this.addDebugLog('[Popup]', 'info', command, 'command succeeded');
       } else {
-        this.showStatus(response?.error || 'Command failed', 'error');
+        const errorMsg = response?.error || 'Command failed';
+        this.showStatus(errorMsg, 'error');
+        this.addDebugLog('[Popup]', 'warn', command, 'command failed', { error: errorMsg });
       }
     } catch (error) {
       // Tab might be closed or inactive, try to refresh
@@ -605,7 +757,7 @@ class PopupController {
     }
   }
 
-  async updatePlayerState() {
+  async updatePlayerState(options = {}) {
     if (!this.activeTabId) return;
 
     try {
@@ -613,8 +765,29 @@ class PopupController {
         action: 'getPlayerState' 
       });
 
-      if (response && response.success) {
-        const state = response.state;
+      const ok = this.isSuccessfulResponse(response);
+      this.logCommandInterpretation('getPlayerState', response, ok);
+
+      if (ok) {
+        const state = this.getResponseResult(response);
+        this.addDebugLog('[Popup]', 'info', 'getPlayerState', 'player state received', {
+          title: state?.title || state?.videoTitle,
+          paused: state?.paused,
+          isPlaying: state?.isPlaying
+        });
+        if (options.initial) {
+          this.addDebugLog('[Popup]', 'info', 'getPlayerState', 'initial player state received', {
+            title: state?.title || state?.videoTitle,
+            paused: state?.paused,
+            isPlaying: state?.isPlaying
+          });
+        }
+
+        if (!state) {
+          throw new Error('Missing player state result');
+        }
+
+        this.updateFailureCount = 0; // Reset on success
         
         // Check if it's a valid YouTube video page
         if (!state.isValidPage) {
@@ -627,23 +800,33 @@ class PopupController {
 
         // Update player UI with fresh state
         this.updatePlayerUI(state);
+        if (options.saveHistory) {
+          await this.saveHistoryFromState(state, 'initial state');
+        }
         
         // Update status with video info
-        if (state.videoTitle) {
-          const shortTitle = state.videoTitle.length > 25 ? 
-                            state.videoTitle.substring(0, 25) + '...' : 
-                            state.videoTitle;
+        const displayTitle = state.title || state.videoTitle;
+        if (displayTitle) {
+          const shortTitle = displayTitle.length > 25 ? 
+                            displayTitle.substring(0, 25) + '...' : 
+                            displayTitle;
           this.updateStatusIndicator(`Connected: ${shortTitle}`, 'success');
         } else {
           this.updateStatusIndicator('Connected to YouTube', 'success');
         }
       }
+      return this.getResponseResult(response);
     } catch (error) {
-      // Connection lost
-      this.showStatus('Connection to YouTube tab lost', 'error');
-      this.isYouTubeTab = false;
-      this.activeTabId = null;
-      this.updateUI();
+      this.updateFailureCount++;
+      
+      // Stop polling after too many failures
+      if (this.updateFailureCount >= this.maxUpdateFailures) {
+        console.log('Popup: Stopping updates after', this.updateFailureCount, 'failures');
+        this.stopUpdates();
+        this.showStatus('Content script disconnected', 'error');
+      } else {
+        console.log('Popup: Update failed (' + this.updateFailureCount + '/' + this.maxUpdateFailures + '):', error.message);
+      }
     }
   }
 
@@ -654,8 +837,15 @@ class PopupController {
       const textSpan = this.buttons.stopButton.querySelector('span:not(.icon)');
       
       if (iconSpan && textSpan) {
-        iconSpan.textContent = state.isPlaying ? '⏸️' : '▶️';
-        textSpan.textContent = state.isPlaying ? 'Pause' : 'Play';
+        const shouldShowPause = state.isPlaying === true || state.paused === false;
+        const renderedAs = shouldShowPause ? 'Pause' : 'Play';
+        iconSpan.textContent = shouldShowPause ? '||' : '>';
+        textSpan.textContent = renderedAs;
+        this.addDebugLog('[Popup]', 'info', 'renderPlayButton', 'play button rendered as Play/Pause', {
+          renderedAs,
+          paused: state.paused,
+          isPlaying: state.isPlaying
+        });
       }
     }
     
@@ -665,7 +855,7 @@ class PopupController {
       const textSpan = this.buttons.muteButton.querySelector('span:not(.icon)');
       
       if (iconSpan && textSpan) {
-        iconSpan.textContent = state.isMuted ? '🔇' : '🔊';
+        iconSpan.textContent = state.isMuted ? 'M-' : 'M';
         textSpan.textContent = state.isMuted ? 'Unmute' : 'Mute';
       }
     }
@@ -684,6 +874,14 @@ class PopupController {
       this.currentSpeed = state.playbackRate;
       this.updateSpeedUI();
     }
+
+    this.addDebugLog('[Popup]', 'info', 'updatePlayerUI', 'UI state rendered', {
+      title: state.title || state.videoTitle,
+      paused: state.paused,
+      isPlaying: state.isPlaying,
+      volume: state.volume,
+      playbackRate: state.playbackRate
+    });
   }
 
   // NEW: Volume control methods
@@ -693,14 +891,20 @@ class PopupController {
     
     if (this.activeTabId) {
       try {
-        await browser.tabs.sendMessage(this.activeTabId, {
+        const response = await browser.tabs.sendMessage(this.activeTabId, {
           action: 'setVolume',
           volume: this.currentVolume
         });
+        const ok = this.isSuccessfulResponse(response);
+        this.logCommandInterpretation('setVolume', response, ok);
+        if (!ok) {
+          this.showStatus(response?.error || 'Volume command failed', 'error');
+        }
       } catch (error) {
-        // Error setting volume
+        this.addDebugLog('[Error]', 'warn', 'setVolume', 'important failure', { error: error.message });
       }
     }
+    return null;
   }
 
   adjustVolume(delta) {
@@ -723,13 +927,19 @@ class PopupController {
     
     if (this.activeTabId) {
       try {
-        await browser.tabs.sendMessage(this.activeTabId, {
+        const response = await browser.tabs.sendMessage(this.activeTabId, {
           action: 'setPlaybackSpeed',
           speed: speed
         });
-        this.showStatus(`Speed set to ${speed}x`, 'success');
+        const ok = this.isSuccessfulResponse(response);
+        this.logCommandInterpretation('setPlaybackSpeed', response, ok);
+        if (ok) {
+          this.showStatus(`Speed set to ${speed}x`, 'success');
+        } else {
+          this.showStatus(response?.error || 'Speed command failed', 'error');
+        }
       } catch (error) {
-        // Error setting playback speed
+        this.addDebugLog('[Error]', 'warn', 'setPlaybackSpeed', 'important failure', { error: error.message });
       }
     }
   }
@@ -745,10 +955,437 @@ class PopupController {
     });
   }
 
+  startHistoryTracking() {
+    this.stopHistoryTracking();
+    this.historySaveInterval = setInterval(async () => {
+      await this.saveCurrentHistoryEntry('interval');
+    }, WATCH_HISTORY_SAVE_INTERVAL);
+  }
+
+  stopHistoryTracking() {
+    if (this.historySaveInterval) {
+      clearInterval(this.historySaveInterval);
+      this.historySaveInterval = null;
+    }
+  }
+
+  async loadWatchHistory() {
+    try {
+      const result = await browser.storage.local.get(WATCH_HISTORY_KEY);
+      const history = Array.isArray(result[WATCH_HISTORY_KEY]) ? result[WATCH_HISTORY_KEY] : [];
+      this.watchHistory = history.slice(0, WATCH_HISTORY_LIMIT);
+      this.renderResumeList();
+      this.addDebugLog('[History]', 'info', 'load', 'loaded', { count: this.watchHistory.length });
+    } catch (error) {
+      this.watchHistory = [];
+      this.renderResumeList();
+      this.addDebugLog('[History]', 'error', 'load', 'skipped with reason', { reason: error.message });
+    }
+  }
+
+  async saveCurrentHistoryEntry(reason = 'manual') {
+    if (!this.activeTabId || !this.isYouTubeTab) {
+      this.addDebugLog('[History]', 'info', 'save', 'skipped with reason', { reason: 'no active YouTube tab', source: reason });
+      return;
+    }
+
+    try {
+      const response = await browser.tabs.sendMessage(this.activeTabId, {
+        action: 'getPlayerState'
+      });
+      const ok = this.isSuccessfulResponse(response);
+      const state = this.getResponseResult(response);
+      if (!ok || !state) {
+        this.addDebugLog('[History]', 'info', 'save', 'skipped with reason', { reason: 'missing player state', source: reason });
+        return;
+      }
+
+      await this.saveHistoryFromState(state, reason);
+    } catch (error) {
+      this.addDebugLog('[History]', 'warn', 'save', 'skipped with reason', { reason: error.message, source: reason });
+    }
+  }
+
+  async saveHistoryFromState(state, reason = 'state') {
+    if (!state?.isValidPage || !state.hasVideo) {
+      this.addDebugLog('[History]', 'info', 'save', 'skipped with reason', { reason: 'not a valid video page', source: reason });
+      return;
+    }
+
+    if (!state.videoId) {
+      this.addDebugLog('[History]', 'info', 'save', 'skipped with reason', { reason: 'missing videoId', source: reason });
+      return;
+    }
+
+    const entry = this.buildHistoryEntry(state);
+    if (!entry) {
+      this.addDebugLog('[History]', 'info', 'save', 'skipped with reason', { reason: 'invalid history entry', source: reason });
+      return;
+    }
+
+    const existing = this.watchHistory.filter(item => item.videoId !== entry.videoId);
+    this.watchHistory = [entry, ...existing]
+      .sort((a, b) => new Date(b.lastWatchedAt).getTime() - new Date(a.lastWatchedAt).getTime())
+      .slice(0, WATCH_HISTORY_LIMIT);
+
+    await browser.storage.local.set({ [WATCH_HISTORY_KEY]: this.watchHistory });
+    this.renderResumeList();
+    this.addDebugLog('[History]', 'info', 'save', 'saved', {
+      videoId: entry.videoId,
+      title: entry.title,
+      progressPercent: entry.progressPercent,
+      count: this.watchHistory.length
+    });
+  }
+
+  buildHistoryEntry(state) {
+    const duration = Number(state.duration) || 0;
+    const currentTime = Math.max(0, Number(state.currentTime) || 0);
+    const progressPercent = duration > 0 ? Math.min(100, Math.round((currentTime / duration) * 100)) : 0;
+    const title = state.title || state.videoTitle || 'Video detected - title unavailable';
+
+    return {
+      videoId: state.videoId,
+      title,
+      url: state.url || `https://www.youtube.com/watch?v=${encodeURIComponent(state.videoId)}`,
+      channelName: state.channelName || '',
+      channelKey: state.channelKey || '',
+      currentTime: Math.floor(currentTime),
+      duration: Math.floor(duration),
+      progressPercent,
+      lastWatchedAt: new Date().toISOString(),
+      thumbnailUrl: state.thumbnailUrl || ''
+    };
+  }
+
+  renderResumeList() {
+    if (!this.buttons.resumeList) return;
+
+    const query = this.historySearchTerm;
+    const matches = this.watchHistory
+      .filter(entry => {
+        if (!query) return true;
+        return `${entry.title || ''} ${entry.channelName || ''}`.toLowerCase().includes(query);
+      })
+      .slice(0, WATCH_HISTORY_VISIBLE_LIMIT);
+
+    this.buttons.resumeList.textContent = '';
+    if (this.buttons.resumeStatus) {
+      this.buttons.resumeStatus.textContent = matches.length ? '' : 'No saved videos yet';
+    }
+
+    matches.forEach(entry => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'resume-entry';
+      button.dataset.videoId = entry.videoId;
+
+      const title = document.createElement('span');
+      title.className = 'resume-title';
+      title.textContent = entry.title || 'Untitled video';
+
+      const meta = document.createElement('span');
+      meta.className = 'resume-meta';
+      meta.textContent = this.formatHistoryMeta(entry);
+
+      button.appendChild(title);
+      button.appendChild(meta);
+      button.addEventListener('click', () => this.openResumeEntry(entry));
+      this.buttons.resumeList.appendChild(button);
+    });
+  }
+
+  formatHistoryMeta(entry) {
+    const parts = [];
+    if (entry.channelName) {
+      parts.push(entry.channelName);
+    }
+
+    if (entry.progressPercent > 0) {
+      parts.push(`${entry.progressPercent}% watched`);
+    } else if (entry.currentTime > 0) {
+      parts.push(this.formatTime(entry.currentTime));
+    }
+
+    parts.push(this.formatShortDate(entry.lastWatchedAt));
+    return parts.join(' | ');
+  }
+
+  formatShortDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'recently';
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  buildResumeUrl(entry) {
+    const seconds = Math.max(0, Math.floor(Number(entry.currentTime) || 0));
+    const baseUrl = entry.url || `https://www.youtube.com/watch?v=${encodeURIComponent(entry.videoId)}`;
+
+    try {
+      const url = new URL(baseUrl);
+      if (!url.searchParams.get('v') && entry.videoId && !url.pathname.startsWith('/shorts/')) {
+        url.searchParams.set('v', entry.videoId);
+      }
+      if (seconds > 0) {
+        url.searchParams.set('t', `${seconds}s`);
+      }
+      return url.href;
+    } catch (error) {
+      const fallback = new URL('https://www.youtube.com/watch');
+      fallback.searchParams.set('v', entry.videoId);
+      if (seconds > 0) {
+        fallback.searchParams.set('t', `${seconds}s`);
+      }
+      return fallback.href;
+    }
+  }
+
+  async openResumeEntry(entry) {
+    const url = this.buildResumeUrl(entry);
+    this.addDebugLog('[History]', 'info', 'resume', 'resume clicked', {
+      videoId: entry.videoId,
+      currentTime: entry.currentTime
+    });
+    this.addDebugLog('[History]', 'info', 'resume', 'open resume URL', { url });
+    await browser.tabs.create({ url });
+  }
+
+  isSuccessfulResponse(response) {
+    return response && (response.ok === true || response.success === true);
+  }
+
+  getResponseResult(response) {
+    return response?.result || response?.state || response || null;
+  }
+
+  logCommandInterpretation(command, response, ok) {
+    this.addDebugLog('[Popup]', ok ? 'info' : 'warn', command, 'command interpreted ok/fail', {
+      ok,
+      responseOk: response?.ok,
+      responseSuccess: response?.success,
+      error: response?.error
+    });
+    this.addDebugLog('[Command]', ok ? 'info' : 'warn', command, 'result', {
+      ok,
+      error: response?.error
+    });
+  }
+
+  setProfileStatus(message, type = 'info') {
+    const colors = {
+      success: '#4CAF50',
+      error: '#f44336',
+      warning: '#ff9800',
+      info: '#2196F3'
+    };
+
+    if (this.buttons.profileStatus) {
+      this.buttons.profileStatus.textContent = message;
+      this.buttons.profileStatus.style.color = colors[type] || colors.info;
+    } else {
+      this.showStatus(message, type);
+    }
+  }
+
+  async getProfileContext() {
+    if (!this.activeTabId || !this.isYouTubeTab) {
+      this.setProfileStatus('No channel detected', 'warning');
+      this.addDebugLog('[Profile]', 'info', 'context', 'skipped with reason', { reason: 'no active YouTube tab' });
+      return null;
+    }
+
+    try {
+      const response = await browser.tabs.sendMessage(this.activeTabId, {
+        action: 'getCurrentProfileContext'
+      });
+
+      if (!this.isSuccessfulResponse(response) || !response.result) {
+        throw new Error(response?.error || 'No channel detected');
+      }
+
+      return response.result;
+    } catch (error) {
+      console.log('[Profile] context failed', error.message);
+      this.setProfileStatus('No channel detected', 'warning');
+      this.addDebugLog('[Profile]', 'warn', 'context', 'skipped with reason', {
+        reason: error.message
+      });
+      return null;
+    }
+  }
+
+  buildProfileFromContext(context) {
+    const speed = Number(context.speed);
+    const volume = Number(context.volume);
+
+    return {
+      speed: Number.isFinite(speed) ? speed : 1,
+      volume: Number.isFinite(volume) ? Math.max(0, Math.min(100, Math.round(volume))) : 100,
+      muted: context.muted === true,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  async saveChannelProfile() {
+    const context = await this.getProfileContext();
+    if (!context) return;
+
+    if (!context.channelKey) {
+      this.setProfileStatus('No channel detected', 'warning');
+      this.addDebugLog('[Profile]', 'warn', 'channelProfile', 'skipped with reason', { reason: 'no channel detected' });
+      return;
+    }
+
+    try {
+      const stored = await browser.storage.local.get('ytControllerProfiles');
+      const profiles = stored.ytControllerProfiles && typeof stored.ytControllerProfiles === 'object'
+        ? { ...stored.ytControllerProfiles }
+        : {};
+      profiles[context.channelKey] = {
+        channelName: context.channelName || '',
+        channelUrl: context.channelUrl || '',
+        ...this.buildProfileFromContext(context)
+      };
+
+      await browser.storage.local.set({ ytControllerProfiles: profiles });
+      console.log('[Profile] channel profile saved', profiles[context.channelKey]);
+      this.setProfileStatus('Channel profile saved', 'success');
+      this.addDebugLog('[Profile]', 'info', 'channelProfile', 'channel profile saved', {
+        channelKey: context.channelKey,
+        profile: profiles[context.channelKey]
+      });
+    } catch (error) {
+      console.log('[Profile] save channel failed', error.message);
+      this.setProfileStatus(error.message, 'error');
+      this.addDebugLog('[Profile]', 'error', 'channelProfile', 'channel profile save failed', { error: error.message });
+    }
+  }
+
+  async clearChannelProfile() {
+    const context = await this.getProfileContext();
+    if (!context) return;
+
+    if (!context.channelKey) {
+      this.setProfileStatus('No channel detected', 'warning');
+      this.addDebugLog('[Profile]', 'warn', 'channelProfile', 'skipped with reason', { reason: 'no channel detected' });
+      return;
+    }
+
+    try {
+      const stored = await browser.storage.local.get('ytControllerProfiles');
+      const profiles = stored.ytControllerProfiles && typeof stored.ytControllerProfiles === 'object'
+        ? { ...stored.ytControllerProfiles }
+        : {};
+
+      if (!profiles[context.channelKey]) {
+        this.setProfileStatus('No profile found', 'warning');
+        this.addDebugLog('[Profile]', 'info', 'channelProfile', 'skipped with reason', {
+          reason: 'no profile found',
+          channelKey: context.channelKey
+        });
+        return;
+      }
+
+      delete profiles[context.channelKey];
+      await browser.storage.local.set({ ytControllerProfiles: profiles });
+      console.log('[Profile] channel profile cleared', context.channelKey);
+      this.setProfileStatus('Channel profile cleared', 'success');
+      this.addDebugLog('[Profile]', 'info', 'channelProfile', 'channel profile cleared', {
+        channelKey: context.channelKey
+      });
+    } catch (error) {
+      console.log('[Profile] clear channel failed', error.message);
+      this.setProfileStatus(error.message, 'error');
+      this.addDebugLog('[Profile]', 'error', 'channelProfile', 'channel profile clear failed', { error: error.message });
+    }
+  }
+
+  async saveGlobalProfile() {
+    const context = await this.getProfileContext();
+    if (!context) return;
+
+    try {
+      const profile = this.buildProfileFromContext(context);
+      await browser.storage.local.set({ ytControllerGlobalProfile: profile });
+      console.log('[Profile] global profile saved', profile);
+      this.setProfileStatus('Global profile saved', 'success');
+      this.addDebugLog('[Profile]', 'info', 'globalProfile', 'global profile saved', { profile });
+    } catch (error) {
+      console.log('[Profile] save global failed', error.message);
+      this.setProfileStatus(error.message, 'error');
+      this.addDebugLog('[Profile]', 'error', 'globalProfile', 'global profile save failed', { error: error.message });
+    }
+  }
+
+  async applyGlobalProfile() {
+    if (!this.activeTabId || !this.isYouTubeTab) {
+      this.setProfileStatus('No channel detected', 'warning');
+      this.addDebugLog('[Profile]', 'info', 'globalProfile', 'skipped with reason', { reason: 'no active YouTube tab' });
+      return;
+    }
+
+    try {
+      const { ytControllerGlobalProfile } = await browser.storage.local.get('ytControllerGlobalProfile');
+      if (!ytControllerGlobalProfile) {
+        this.setProfileStatus('No profile found', 'warning');
+        this.addDebugLog('[Profile]', 'info', 'globalProfile', 'skipped with reason', { reason: 'no profile found' });
+        return;
+      }
+
+      const response = await browser.tabs.sendMessage(this.activeTabId, {
+        action: 'applyProfile',
+        profile: ytControllerGlobalProfile
+      });
+
+      const ok = this.isSuccessfulResponse(response);
+      this.logCommandInterpretation('applyProfile', response, ok);
+
+      if (!ok) {
+        throw new Error(response?.error || 'Profile apply failed');
+      }
+
+      if (response.result) {
+        this.currentVolume = response.result.volume;
+        this.currentSpeed = response.result.speed;
+        this.updateVolumeUI();
+        this.updateSpeedUI();
+      }
+
+      console.log('[Profile] global profile applied', response.result);
+      this.setProfileStatus('Global profile applied', 'success');
+      this.addDebugLog('[Profile]', 'info', 'globalProfile', 'global profile applied', {
+        result: response.result
+      });
+      setTimeout(async () => {
+        await this.updatePlayerState({ initial: true, saveHistory: true });
+      }, 100);
+    } catch (error) {
+      console.log('[Profile] apply failed', error.message);
+      this.setProfileStatus(error.message, 'error');
+      this.addDebugLog('[Profile]', 'error', 'globalProfile', 'apply failed', {
+        error: error.message
+      });
+    }
+  }
+
   // NEW: Video information display
   updateVideoInfo(state) {
-    if (state.videoTitle && this.buttons.videoTitle) {
-      this.buttons.videoTitle.textContent = state.videoTitle;
+    if (this.buttons.videoTitle) {
+      const displayTitle = state.title || state.videoTitle;
+      if (displayTitle) {
+        this.buttons.videoTitle.textContent = displayTitle;
+      } else if (state.hasVideo || (state.isValidPage && state.duration > 0)) {
+        // Video exists but title not found yet
+        this.buttons.videoTitle.textContent = 'Video detected - title unavailable';
+      } else if (!state.isValidPage) {
+        // No valid video page
+        this.buttons.videoTitle.textContent = 'No video selected';
+      }
       this.buttons.videoInfo.style.display = 'block';
     }
     
@@ -767,26 +1404,10 @@ class PopupController {
   }
 
   // NEW: Advanced toggle features
-  async toggleTheaterMode() {
-    this.settings.theaterMode = !this.settings.theaterMode;
-    this.updateToggleUI('theaterToggle', this.settings.theaterMode);
-    
-    if (this.activeTabId) {
-      try {
-        await browser.tabs.sendMessage(this.activeTabId, {
-          action: 'toggleTheaterMode',
-          enabled: this.settings.theaterMode
-        });
-        this.showStatus(`Theater mode ${this.settings.theaterMode ? 'enabled' : 'disabled'}`, 'success');
-      } catch (error) {
-        // Error toggling theater mode
-      }
-    }
-    this.saveSettings();
-  }
-
   async toggleAutoPause() {
     this.settings.autoPause = !this.settings.autoPause;
+    console.log('Popup: autoPause toggled to:', this.settings.autoPause);
+    this.addDebugLog('[Settings]', 'info', 'autoPause', 'autoPause changed', { autoPause: this.settings.autoPause });
     this.updateToggleUI('autoPauseToggle', this.settings.autoPause);
     
     // Send to background script for tab monitoring
@@ -797,7 +1418,7 @@ class PopupController {
       });
       this.showStatus(`Auto-pause ${this.settings.autoPause ? 'enabled' : 'disabled'}`, 'success');
     } catch (error) {
-      // Error setting auto-pause
+      console.error('Popup: Error sending SET_AUTO_PAUSE message:', error);
     }
     this.saveSettings();
   }
@@ -819,26 +1440,30 @@ class PopupController {
       const result = await browser.storage.local.get(['youtubeControllerSettings']);
       if (result.youtubeControllerSettings) {
         this.settings = { ...this.settings, ...result.youtubeControllerSettings };
+        console.log('Popup: settings loaded:', this.settings);
+        this.addDebugLog('[Popup]', 'info', 'settings', 'loaded', { settings: this.settings });
         this.updateAllToggles();
       }
     } catch (error) {
-      // Error loading settings
+      console.error('Popup: Error loading settings:', error);
+      this.addDebugLog('[Popup]', 'error', 'settings', 'failed to load', { error: error.message });
     }
   }
 
   async saveSettings() {
     try {
+      console.log('Popup: saving settings:', this.settings);
+      this.addDebugLog('[Popup]', 'info', 'settings', 'saved', { settings: this.settings });
       await browser.storage.local.set({
         youtubeControllerSettings: this.settings
       });
     } catch (error) {
-      // Error saving settings
+      console.error('Popup: Error saving settings:', error);
+      this.addDebugLog('[Popup]', 'error', 'settings', 'failed to save', { error: error.message });
     }
   }
 
   updateAllToggles() {
-    this.updateToggleUI('theaterToggle', this.settings.theaterMode);
-    this.updateToggleUI('pipToggle', this.settings.pipMode);
     this.updateToggleUI('autoPauseToggle', this.settings.autoPause);
   }
 
@@ -862,12 +1487,12 @@ class PopupController {
     modalHeader.className = 'modal-header';
     
     const headerTitle = document.createElement('h3');
-    headerTitle.textContent = '⚙️ Settings';
+    headerTitle.textContent = 'Settings';
     
     const modalCloseBtn = document.createElement('button');
     modalCloseBtn.className = 'close-btn';
     modalCloseBtn.id = 'modal-close-btn';
-    modalCloseBtn.textContent = '×';
+    modalCloseBtn.textContent = 'Close';
     
     modalHeader.appendChild(headerTitle);
     modalHeader.appendChild(modalCloseBtn);
@@ -885,7 +1510,7 @@ class PopupController {
     autoDetectInput.id = 'autoDetectSetting';
     autoDetectInput.checked = this.settings.autoDetect;
     autoDetectLabel.appendChild(autoDetectInput);
-    autoDetectLabel.appendChild(document.createTextNode(' 🔍 Auto-detect YouTube tabs'));
+    autoDetectLabel.appendChild(document.createTextNode(' Auto-detect YouTube tabs'));
     const autoDetectDesc = document.createElement('p');
     autoDetectDesc.className = 'setting-desc';
     autoDetectDesc.textContent = 'Automatically find and connect to YouTube video tabs';
@@ -901,7 +1526,7 @@ class PopupController {
     autoPauseInput.id = 'autoPauseSetting';
     autoPauseInput.checked = this.settings.autoPause;
     autoPauseLabel.appendChild(autoPauseInput);
-    autoPauseLabel.appendChild(document.createTextNode(' ⏸️ Auto-pause on tab switch'));
+    autoPauseLabel.appendChild(document.createTextNode(' Auto-pause on tab switch'));
     const autoPauseDesc = document.createElement('p');
     autoPauseDesc.className = 'setting-desc';
     autoPauseDesc.textContent = 'Pause videos when switching to other tabs';
@@ -917,7 +1542,7 @@ class PopupController {
     darkModeInput.id = 'darkModeSetting';
     darkModeInput.checked = this.settings.darkMode;
     darkModeLabel.appendChild(darkModeInput);
-    darkModeLabel.appendChild(document.createTextNode(' 🌙 Dark mode'));
+    darkModeLabel.appendChild(document.createTextNode(' Dark mode'));
     const darkModeDesc = document.createElement('p');
     darkModeDesc.className = 'setting-desc';
     darkModeDesc.textContent = 'Use dark theme for the extension popup';
@@ -928,7 +1553,7 @@ class PopupController {
     const volumeDiv = document.createElement('div');
     volumeDiv.className = 'setting-item';
     const volumeLabel = document.createElement('label');
-    volumeLabel.textContent = '🔊 Volume step';
+    volumeLabel.textContent = 'Volume step';
     volumeLabel.setAttribute('for', 'volumeStepSetting');
     const volumeSelect = document.createElement('select');
     volumeSelect.id = 'volumeStepSetting';
@@ -950,7 +1575,7 @@ class PopupController {
     const intervalDiv = document.createElement('div');
     intervalDiv.className = 'setting-item';
     const intervalLabel = document.createElement('label');
-    intervalLabel.textContent = '⏱️ Update interval';
+    intervalLabel.textContent = 'Update interval';
     intervalLabel.setAttribute('for', 'updateIntervalSetting');
     const intervalSelect = document.createElement('select');
     intervalSelect.id = 'updateIntervalSetting';
@@ -976,7 +1601,7 @@ class PopupController {
     modalShortcutsBtn.id = 'shortcuts-btn';
     modalShortcutsBtn.style.width = '100%';
     modalShortcutsBtn.style.marginTop = '10px';
-    modalShortcutsBtn.textContent = '⌨️ View Keyboard Shortcuts';
+    modalShortcutsBtn.textContent = 'View Keyboard Shortcuts';
     const shortcutsDesc = document.createElement('p');
     shortcutsDesc.className = 'setting-desc';
     shortcutsDesc.textContent = 'View all available keyboard shortcuts and how to customize them';
@@ -1104,6 +1729,7 @@ class PopupController {
     if (this.settings.darkMode !== darkMode) {
       this.settings.darkMode = darkMode;
       this.applyTheme();
+      this.addDebugLog('[Settings]', 'info', 'theme', 'theme changed', { darkMode: this.settings.darkMode });
     }
 
     this.settings.volumeStep = volumeStep || 10;
@@ -1150,7 +1776,6 @@ class PopupController {
       { key: 'Ctrl+Alt+M', action: 'Mute/Unmute', description: 'Toggle video mute' },
       { key: 'Ctrl+Alt+Up', action: 'Volume Up', description: 'Increase volume by 10%' },
       { key: 'Ctrl+Alt+Down', action: 'Volume Down', description: 'Decrease volume by 10%' },
-      { key: 'Ctrl+Alt+T', action: 'Theater Mode', description: 'Toggle YouTube theater mode' },
       { key: 'Ctrl+Alt+Period', action: 'Speed Up', description: 'Increase playback speed' },
       { key: 'Ctrl+Alt+Comma', action: 'Speed Down', description: 'Decrease playback speed' },
       { key: 'Ctrl+Alt+Right', action: 'Next Video', description: 'Go to next video' },
@@ -1182,7 +1807,7 @@ class PopupController {
     shortcutsModalHeader.className = 'modal-header';
     
     const shortcutsTitle = document.createElement('h3');
-    shortcutsTitle.textContent = '⌨️ Keyboard Shortcuts';
+    shortcutsTitle.textContent = 'Keyboard Shortcuts';
     
     const shortcutsCloseBtn = document.createElement('button');
     shortcutsCloseBtn.className = 'close-btn';
@@ -1249,7 +1874,7 @@ class PopupController {
     const tipsTitle = document.createElement('h4');
     tipsTitle.style.margin = '0 0 10px 0';
     tipsTitle.style.color = '#6495ed';
-    tipsTitle.textContent = '💡 Customizing Shortcuts';
+    tipsTitle.textContent = 'Customizing Shortcuts';
     
     const tipsText = document.createElement('p');
     tipsText.style.margin = '0';
@@ -1360,20 +1985,9 @@ class PopupController {
 
     switch (command) {
       case 'clickPlayPause':
-        if (this.buttons.stopButton) {
-          const iconSpan = this.buttons.stopButton.querySelector('.icon');
-          const textSpan = this.buttons.stopButton.querySelector('span:not(.icon)');
-          
-          if (iconSpan && textSpan) {
-            if (state.includes('Pause')) {
-              iconSpan.textContent = '⏸️';
-              textSpan.textContent = 'Pause';
-            } else if (state.includes('Play')) {
-              iconSpan.textContent = '▶️';
-              textSpan.textContent = 'Play';
-            }
-          }
-        }
+        setTimeout(async () => {
+          await this.updatePlayerState();
+        }, 100);
         break;
 
       case 'clickMute':
@@ -1383,10 +1997,10 @@ class PopupController {
           
           if (iconSpan && textSpan) {
             if (state.includes('Unmute')) {
-              iconSpan.textContent = '🔇';
+              iconSpan.textContent = 'M-';
               textSpan.textContent = 'Unmute';
             } else if (state.includes('Mute')) {
-              iconSpan.textContent = '🔊';
+              iconSpan.textContent = 'M';
               textSpan.textContent = 'Mute';
             }
           }
@@ -1439,9 +2053,11 @@ class PopupController {
       const currentState = await browser.tabs.sendMessage(this.activeTabId, { 
         action: 'getPlayerState' 
       });
+      const ok = this.isSuccessfulResponse(currentState);
+      const state = this.getResponseResult(currentState);
 
       // If current tab is not responding, not playing, or not ready, switch to new tab
-      if (!currentState || !currentState.success || !currentState.state.isPlaying || !currentState.state.isReady) {
+      if (!ok || !state?.isPlaying || !state?.isReady) {
         await this.testAndConnectToTab(tabId, 'Switched to new YouTube video');
       }
     } catch (error) {
@@ -1454,7 +2070,9 @@ class PopupController {
     const controlButtons = [
       this.buttons.nextButton, this.buttons.stopButton, 
       this.buttons.backButton, this.buttons.muteButton,
-      this.buttons.volumeSlider, this.buttons.volumeUp, this.buttons.volumeDown
+      this.buttons.volumeSlider, this.buttons.volumeUp, this.buttons.volumeDown,
+      this.buttons.saveChannelProfile, this.buttons.clearChannelProfile,
+      this.buttons.saveGlobalProfile, this.buttons.applyGlobalProfile
     ];
 
     if (this.isYouTubeTab && this.activeTabId) {
@@ -1474,7 +2092,7 @@ class PopupController {
       
       // Update get tab button
       if (this.buttons.getTabButton) {
-        this.buttons.getTabButton.textContent = '🔄 Rescan Tabs';
+        this.buttons.getTabButton.textContent = 'Rescan Tabs';
         this.buttons.getTabButton.classList.add('primary');
         this.buttons.getTabButton.title = 'Click to rescan for YouTube tabs';
       }
@@ -1503,7 +2121,7 @@ class PopupController {
       
       // Reset get tab button
       if (this.buttons.getTabButton) {
-        this.buttons.getTabButton.textContent = '🔍 Find YouTube Tab';
+        this.buttons.getTabButton.textContent = 'Find YouTube Tab';
         this.buttons.getTabButton.classList.remove('primary');
         this.buttons.getTabButton.title = 'Click to search for YouTube tabs';
       }
@@ -1564,6 +2182,142 @@ class PopupController {
       }
     }, 3000);
   }
+
+  // New easy feature: Copy video info
+  // New medium feature: Sleep Timer
+  startSleepTimer(minutes) {
+    if (this.sleepTimerId) {
+      clearTimeout(this.sleepTimerId);
+      clearInterval(this.sleepCountdownInterval);
+    }
+
+    const milliseconds = minutes * 60 * 1000;
+    let remainingMs = milliseconds;
+
+    // Show timer display
+    this.buttons.sleepTimerDisplay.style.display = 'block';
+    this.buttons.cancelSleepBtn.style.display = 'block';
+
+    // Update countdown display
+    const updateCountdown = () => {
+      const mins = Math.floor(remainingMs / 60000);
+      const secs = Math.floor((remainingMs % 60000) / 1000);
+      this.buttons.sleepCountdown.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    updateCountdown();
+    this.showStatus(`Sleep timer set to ${minutes} minutes`, 'info');
+
+    // Update countdown every second
+    this.sleepCountdownInterval = setInterval(() => {
+      remainingMs -= 1000;
+      if (remainingMs <= 0) {
+        clearInterval(this.sleepCountdownInterval);
+        this.pauseAllVideos();
+        return;
+      }
+      updateCountdown();
+    }, 1000);
+
+    // Pause after timer expires
+    this.sleepTimerId = setTimeout(() => {
+      this.pauseAllVideos();
+      this.showStatus('Sleep timer expired - pausing videos', 'info');
+      this.buttons.sleepTimerDisplay.style.display = 'none';
+      this.buttons.cancelSleepBtn.style.display = 'none';
+    }, milliseconds);
+  }
+
+  cancelSleepTimer() {
+    if (this.sleepTimerId) {
+      clearTimeout(this.sleepTimerId);
+      clearInterval(this.sleepCountdownInterval);
+      this.sleepTimerId = null;
+      this.buttons.sleepTimerDisplay.style.display = 'none';
+      this.buttons.cancelSleepBtn.style.display = 'none';
+      this.showStatus('Sleep timer cancelled', 'info');
+    }
+  }
+
+  async pauseAllVideos() {
+    if (this.activeTabId) {
+      try {
+        await browser.tabs.sendMessage(this.activeTabId, {
+          action: 'clickPlayPause'
+        });
+      } catch (error) {
+        // Tab may no longer exist
+      }
+    }
+  }
+
+  // New medium feature: Auto-Play Toggle
+  // New medium feature: Video Stats Display
+  async updateVideoStats() {
+    if (!this.activeTabId || !this.isYouTubeTab) {
+      this.buttons.statsPanel.style.display = 'none';
+      return;
+    }
+
+    try {
+      const response = await browser.tabs.sendMessage(this.activeTabId, {
+        action: 'getVideoStats'
+      });
+
+      if (response && response.stats) {
+        const stats = response.stats;
+        this.buttons.statsDuration.textContent = this.formatTime(stats.duration);
+        this.buttons.statsProgress.textContent = `${stats.progress}%`;
+        this.buttons.statsBitrate.textContent = stats.bitrate;
+        this.buttons.statsResolution.textContent = stats.resolution;
+        this.buttons.statsPanel.style.display = 'block';
+      }
+    } catch (error) {
+      this.buttons.statsPanel.style.display = 'none';
+    }
+  }
+
+  formatTime(seconds) {
+    if (!seconds || isNaN(seconds)) return '--:--';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  // Auto-save playback position
+  async savePlaybackPosition() {
+    if (!this.activeTabId || !this.settings.rememberPosition) {
+      return;
+    }
+
+    try {
+      await browser.tabs.sendMessage(this.activeTabId, {
+        action: 'savePlaybackPosition'
+      });
+    } catch (error) {
+      // Silently fail, tab may not be available
+    }
+  }
+
+  // Resume playback from saved position
+  async resumePlaybackPosition() {
+    if (!this.activeTabId || !this.settings.rememberPosition) {
+      return;
+    }
+
+    try {
+      await browser.tabs.sendMessage(this.activeTabId, {
+        action: 'resumePlaybackPosition'
+      });
+    } catch (error) {
+      // Silently fail
+    }
+  }
 }
 
 // Initialize popup when DOM is ready
@@ -1580,5 +2334,8 @@ window.addEventListener('beforeunload', () => {
   if (window.popupController) {
     window.popupController.stopAutoDetection();
     window.popupController.stopTimeUpdates();
+    window.popupController.stopHistoryTracking();
   }
 });
+
+// Debug logs stored in browser.storage.local - see instructions below
