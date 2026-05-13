@@ -5,6 +5,14 @@
   "description": "Enhanced YouTube controller with keyboard shortcuts, volume control, speed adjustment, and advanced features",
   "author": "Alireza Talebi",
   "homepage_url": "https://github.com/AlirezaTalebi/Youtube-Buttons-Controller-Firefox-Extention",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "youtube-button-controller@alirezatalebi",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
   "permissions": [
     "tabs",
     "storage"
