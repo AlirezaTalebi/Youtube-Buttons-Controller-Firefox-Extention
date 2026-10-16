@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Authentic YouTube Red Squircle -->
+  <rect x="4" y="4" width="120" height="120" rx="30" fill="#FF0000"/>
+
+  <!-- Centered Bold White Play Symbol -->
+  <polygon points="50,38 90,64 50,90" fill="#FFFFFF"/>
+
+  <!-- Bottom Media Controller Track & Thumb -->
+  <rect x="28" y="102" width="72" height="6" rx="3" fill="#FFFFFF" opacity="0.4"/>
+  <rect x="28" y="102" width="44" height="6" rx="3" fill="#FFFFFF"/>
+  <circle cx="72" cy="105" r="5" fill="#FFFFFF"/>
+</svg>

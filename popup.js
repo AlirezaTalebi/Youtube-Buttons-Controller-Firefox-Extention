@@ -1,5 +1,5 @@
 /**
- * YouTube Button Controller - Enhanced Popup Script v2.3.0
+ * YouTube Button Controller - Enhanced Popup Script v2.5.0
  * Advanced YouTube controller with volume, speed, and smart features
  * 
  * Author: Alireza Talebi
@@ -12,55 +12,44 @@
 
 const HELP_TOPICS = [
   {
-    title: 'Basic Controls',
+    title: 'YouTube Thumbnail Mini-Player (Top)',
     items: [
-      'Play/Pause controls the current YouTube video.',
-      'Previous/Next use YouTube playlist/video navigation when available.',
-      'Mute toggles video sound.',
-      'Speed and Volume controls affect the active video.'
+      'All main playback & volume controls live directly on the top video thumbnail, just like YouTube.',
+      'Click anywhere on the thumbnail image (or the Play/Pause button) to Play/Pause.',
+      'Use Previous/Next track buttons for playlist/video navigation, and the Speaker icon to Mute/Unmute.',
+      'Adjust volume right on the overlay using -, the slider, or +.',
+      'Drag the red progress bar along the bottom of the thumbnail to seek.'
     ]
   },
   {
-    title: 'Current Video Card',
+    title: 'UI Scale (Small / Medium / Large)',
     items: [
-      'Shows the current video thumbnail, title, channel, and playback progress.',
-      'The progress bar updates while the popup is open.',
-      'Drag the progress bar to seek forward or backward in the video.',
-      'Focus Tab brings the YouTube tab to the foreground.',
-      'Open Video opens or focuses the current video URL.'
+      'Use the Small / Medium / Large selector in the top header to resize the entire interface.',
+      'Small scale compacts spacing, fonts, and thumbnail height so you can see almost all sections at once without scrolling.',
+      'Medium is the balanced default; Large gives wider controls and extra breathing room.'
     ]
   },
   {
-    title: 'Auto-pause on Tab Switch',
+    title: 'Reorder & Collapse Sections',
     items: [
-      'Enable this in Settings.',
-      'When you leave a playing YouTube tab, the extension pauses the old tab.',
-      'It does not resume videos automatically.'
+      'Every section below the player can be moved up/down using the Up/Down chevron buttons or by dragging its header grip.',
+      'Click the Collapse chevron (or the section header title) to collapse or expand sections you use less often.',
+      'Your custom section order and collapsed states are saved automatically (and can be reset in Settings).'
     ]
   },
   {
-    title: 'Settings Profiles',
+    title: 'Settings Profiles & Auto-Pause',
     items: [
       'Save Channel Profile stores speed, volume, and mute for the current channel.',
-      'Clear Channel Profile removes the saved profile for this channel.',
-      'Save Global Default stores a fallback profile for channels without their own profile.',
-      'Apply Global Default applies the global speed, volume, and mute immediately.'
+      'Save/Apply Global Default manages fallback settings for channels without a saved profile.',
+      'Auto-Pause pauses the current YouTube video automatically when you switch to another tab.'
     ]
   },
   {
     title: 'Watch History + Resume',
     items: [
-      'Watched videos are saved locally in the extension.',
-      'The Resume section shows recent videos with their saved playback position.',
-      'Click a video in Resume to reopen it at the saved timestamp.',
-      'Search filters the local watch history.'
-    ]
-  },
-  {
-    title: 'Popup Size and Theme',
-    items: [
-      'Popup Size changes between Compact (340px), Normal (390px), and Wide (480px) layouts.',
-      'Theme switches between Light and Dark mode based on your preference.'
+      'Watched videos are saved locally with their playback progress.',
+      'Click any entry in Resume to reopen the video at your saved timestamp, or filter with Search.'
     ]
   },
   {
@@ -79,6 +68,32 @@ const WATCH_HISTORY_VISIBLE_LIMIT = 10;
 const WATCH_HISTORY_SAVE_INTERVAL = 12000;
 const POPUP_SIZE_KEY = 'ytControllerPopupSize';
 const POPUP_SIZE_VALUES = ['compact', 'normal', 'wide'];
+const SECTION_ORDER_KEY = 'ytControllerSectionOrder';
+const COLLAPSED_SECTIONS_KEY = 'ytControllerCollapsedSections';
+const DEFAULT_SECTION_ORDER = ['speed', 'profiles', 'resume', 'advanced', 'sleep', 'stats'];
+
+const SVG_ICONS = {
+  play: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor"></polygon></svg>',
+  pause: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"></rect><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"></rect></svg>',
+  volumeHigh: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07" fill="none"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14" fill="none"></path></svg>',
+  volumeMuted: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>',
+  grip: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.8" fill="currentColor"></circle><circle cx="15" cy="6" r="1.8" fill="currentColor"></circle><circle cx="9" cy="12" r="1.8" fill="currentColor"></circle><circle cx="15" cy="12" r="1.8" fill="currentColor"></circle><circle cx="9" cy="18" r="1.8" fill="currentColor"></circle><circle cx="15" cy="18" r="1.8" fill="currentColor"></circle></svg>',
+  chevronUp: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>',
+  chevronDown: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+  playCircle: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"></polygon></svg>',
+  keyboard: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="6" y1="8" x2="6.01" y2="8"></line><line x1="10" y1="8" x2="10.01" y2="8"></line><line x1="14" y1="8" x2="14.01" y2="8"></line><line x1="18" y1="8" x2="18.01" y2="8"></line><line x1="8" y1="12" x2="8.01" y2="12"></line><line x1="12" y1="12" x2="12.01" y2="12"></line><line x1="16" y1="12" x2="16.01" y2="12"></line><line x1="7" y1="16" x2="17" y2="16"></line></svg>',
+  reset: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>',
+  check: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+  close: '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+  sections: {
+    speed: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14l4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path></svg>',
+    profiles: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>',
+    resume: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>',
+    advanced: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>',
+    sleep: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>',
+    stats: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>'
+  }
+};
 
 class PopupController {
   constructor() {
@@ -91,19 +106,26 @@ class PopupController {
     this.settings = {
       autoPause: false,
       autoDetect: true,
-      darkMode: true
+      darkMode: true,
+      volumeStep: 10,
+      updateInterval: 1000
     };
     this.autoDetectInterval = null;
     this.updateInterval = null;
-    this.sleepTimerId = null;
+    this.sleepTimerEndTime = null;
     this.sleepCountdownInterval = null;
     this.statsUpdateInterval = null;
     this.historySaveInterval = null;
     this.watchHistory = [];
     this.historySearchTerm = '';
     this.popupSize = 'normal';
+    this.sectionOrder = [...DEFAULT_SECTION_ORDER];
+    this.collapsedSections = [];
+    this.draggedSection = null;
     this.updateFailureCount = 0;
     this.maxUpdateFailures = 3;
+    this.isDragging = false;
+    this.debugLogQueue = Promise.resolve();
     this.init();
   }
 
@@ -112,15 +134,18 @@ class PopupController {
     // Cache button references
     this.cacheButtons();
     
-    // Setup event listeners
+    // Setup event listeners & reorderable sections
     this.setupEventListeners();
+    this.initReorderableSections();
     this.renderHelpTopics();
     
-    // Load saved settings
+    // Load saved settings & layout
     await this.loadSettings();
     await this.loadPopupSize();
+    await this.loadSectionLayout();
     this.applyTheme();
     await this.loadWatchHistory();
+    await this.syncSleepTimer();
     
     // Load saved tab or detect current tab
     await this.loadActiveTab();
@@ -147,34 +172,39 @@ class PopupController {
     this.startHistoryTracking();
   }
 
-  async addDebugLog(scope, level, action, message, data = {}) {
-    try {
-      const { ytControllerDebugLog = [] } = await browser.storage.local.get('ytControllerDebugLog');
-      const logs = Array.isArray(ytControllerDebugLog) ? ytControllerDebugLog : [];
-      logs.push({ time: new Date().toISOString(), scope, level, action, message, data });
-      if (logs.length > 150) logs.shift();
-      await browser.storage.local.set({ ytControllerDebugLog: logs });
-    } catch (e) {
-      console.error('[DebugLog] Storage error:', e);
-    }
+  addDebugLog(scope, level, action, message, data = {}) {
+    this.debugLogQueue = this.debugLogQueue.then(async () => {
+      try {
+        const { ytControllerDebugLog = [] } = await browser.storage.local.get('ytControllerDebugLog');
+        const logs = Array.isArray(ytControllerDebugLog) ? ytControllerDebugLog : [];
+        logs.push({ time: new Date().toISOString(), scope, level, action, message, data });
+        while (logs.length > 150) logs.shift();
+        await browser.storage.local.set({ ytControllerDebugLog: logs });
+      } catch (e) {
+        console.error('[DebugLog] Storage error:', e);
+      }
+    });
+    return this.debugLogQueue;
   }
 
   cacheButtons() {
     const buttonIds = [
-      'nextButton', 'stopButton', 'backButton', 'muteButton', 'getTabButton',
+      'nextButton', 'stopButton', 'backButton', 'muteButton', 'getTabButton', 'getTabButtonText',
+      'thumbnailPlayArea', 'thumbCenterBadge', 'sectionsContainer',
       'volumeSlider', 'volumeUp', 'volumeDown', 'volumeValue',
       'autoPauseToggle', 'captionsToggle', 'settingsButton',
-      'statusIndicator', 'videoInfo', 'videoTitle',
+      'statusDot', 'statusIndicator', 'videoInfo', 'videoTitle',
       'currentVideoThumbnail', 'currentVideoThumbnailPlaceholder', 'currentVideoChannel',
       'currentVideoProgressBar', 'currentVideoTime',
       'focusTabButton', 'openVideoButton',
-      'darkModeToggle', 'seekBar', 'currentTimeDisplay', 'durationDisplay',
+      'darkModeToggle',
       'cancelSleepBtn', 'sleepTimerDisplay', 'sleepCountdown',
       'statsPanel', 'statsDuration', 'statsProgress', 'statsBitrate', 'statsResolution',
       'saveChannelProfile', 'clearChannelProfile', 'saveGlobalProfile', 'applyGlobalProfile',
       'profileStatus', 'resumeSearch', 'resumeList', 'resumeStatus',
       'popupSizeSelect',
-      'helpToggle', 'helpPanel', 'helpContent'
+      'helpToggle', 'helpToggleText', 'helpPanel', 'helpContent',
+      'donateToggleHeader', 'donateToggleBtn', 'donateDrawer', 'donatePaypalDrawerBtn'
     ];
     
     buttonIds.forEach(id => {
@@ -192,12 +222,90 @@ class PopupController {
   }
 
   setupEventListeners() {
-    // Basic control buttons
+    // Donation controls
+    const toggleDonateDrawer = () => {
+      if (!this.buttons.donateDrawer) return;
+      const isHidden = this.buttons.donateDrawer.hidden;
+      this.buttons.donateDrawer.hidden = !isHidden;
+      if (this.buttons.donateToggleBtn) {
+        this.buttons.donateToggleBtn.setAttribute('aria-expanded', String(isHidden));
+      }
+    };
+
+    const openPaypal = () => {
+      browser.tabs.create({ url: 'https://paypal.me/alirezatalebi' });
+    };
+
+    const copyAddress = async (address, coinName, btnEl) => {
+      if (!address) return;
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(address);
+        copied = true;
+      } catch (err) {
+        try {
+          const input = document.createElement('input');
+          input.value = address;
+          document.body.appendChild(input);
+          input.select();
+          copied = document.execCommand('copy');
+          document.body.removeChild(input);
+        } catch (e) {
+          copied = false;
+        }
+      }
+
+      if (copied) {
+        this.showStatus(`${coinName} address copied to clipboard!`, 'success');
+        const spanText = btnEl?.querySelector('span');
+        if (spanText) {
+          const originalText = spanText.textContent;
+          spanText.textContent = 'Copied!';
+          setTimeout(() => {
+            if (spanText) {
+              spanText.textContent = originalText;
+            }
+          }, 2000);
+        }
+      } else {
+        this.showStatus('Please select and copy the address manually.', 'warning');
+      }
+    };
+
+    this.buttons.donateToggleHeader?.addEventListener('click', toggleDonateDrawer);
+    this.buttons.donateToggleBtn?.addEventListener('click', toggleDonateDrawer);
+    this.buttons.donatePaypalDrawerBtn?.addEventListener('click', openPaypal);
+
+    document.querySelectorAll('.donate-copy-crypto-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const address = btn.getAttribute('data-address');
+        const coin = btn.getAttribute('data-coin') || 'Crypto';
+        copyAddress(address, coin, btn);
+      });
+    });
+
+    document.querySelectorAll('.donate-crypto-grid .donate-address-code').forEach(codeEl => {
+      codeEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = codeEl.closest('.donate-address-row');
+        const btn = row?.querySelector('.donate-copy-crypto-btn');
+        const address = btn?.getAttribute('data-address') || codeEl.textContent.trim();
+        const coin = btn?.getAttribute('data-coin') || 'Crypto';
+        copyAddress(address, coin, btn);
+      });
+    });
+
+    // Basic control buttons (on thumbnail overlay)
     this.buttons.nextButton?.addEventListener('click', () => {
       this.sendCommand('clickNext');
     });
 
     this.buttons.stopButton?.addEventListener('click', () => {
+      this.sendCommand('clickPlayPause');
+    });
+
+    this.buttons.thumbnailPlayArea?.addEventListener('click', () => {
       this.sendCommand('clickPlayPause');
     });
 
@@ -224,15 +332,17 @@ class PopupController {
 
     // Volume controls
     this.buttons.volumeSlider?.addEventListener('input', (e) => {
-      this.setVolume(parseInt(e.target.value));
+      this.setVolume(parseInt(e.target.value, 10));
     });
 
     this.buttons.volumeUp?.addEventListener('click', () => {
-      this.adjustVolume(10);
+      const step = Number(this.settings.volumeStep) || 10;
+      this.adjustVolume(step);
     });
 
     this.buttons.volumeDown?.addEventListener('click', () => {
-      this.adjustVolume(-10);
+      const step = Number(this.settings.volumeStep) || 10;
+      this.adjustVolume(-step);
     });
 
     this.buttons.focusTabButton?.addEventListener('click', () => {
@@ -243,8 +353,42 @@ class PopupController {
       this.openCurrentVideo();
     });
 
-    // Progress bar seeking
+    // Progress bar seeking & drag state tracking
+    const stopDragging = () => {
+      if (this.isDragging) {
+        this.isDragging = false;
+      }
+    };
+
+    this.buttons.currentVideoProgressBar?.addEventListener('pointerdown', () => {
+      this.isDragging = true;
+    });
+
+    this.buttons.currentVideoProgressBar?.addEventListener('mousedown', () => {
+      this.isDragging = true;
+    });
+
+    this.buttons.currentVideoProgressBar?.addEventListener('pointerup', stopDragging);
+    this.buttons.currentVideoProgressBar?.addEventListener('mouseup', stopDragging);
+    this.buttons.currentVideoProgressBar?.addEventListener('pointercancel', stopDragging);
+    this.buttons.currentVideoProgressBar?.addEventListener('blur', stopDragging);
+    window.addEventListener('pointerup', stopDragging);
+    window.addEventListener('mouseup', stopDragging);
+
+    this.buttons.currentVideoProgressBar?.addEventListener('input', (e) => {
+      this.isDragging = true;
+      const value = Number(e.target.value);
+      const percent = value / 1000;
+      e.target.style.setProperty('--progress-pct', `${(percent * 100).toFixed(1)}%`);
+      const duration = Number(this.lastPlayerState?.duration) || 0;
+      if (duration > 0 && this.buttons.currentVideoTime) {
+        const previewTime = duration * percent;
+        this.buttons.currentVideoTime.textContent = `${this.formatTime(previewTime)} / ${this.formatTime(duration)}`;
+      }
+    });
+
     this.buttons.currentVideoProgressBar?.addEventListener('change', (e) => {
+      this.isDragging = false;
       const value = Number(e.target.value);
       const percent = value / 1000;
       if (this.lastPlayerState?.duration > 0) {
@@ -256,7 +400,7 @@ class PopupController {
     // Speed controls
     this.speedButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const speed = parseFloat(e.target.dataset.speed);
+        const speed = parseFloat(e.currentTarget.dataset.speed);
         this.setPlaybackSpeed(speed);
       });
     });
@@ -300,7 +444,7 @@ class PopupController {
     // Sleep timer buttons
     this.sleepButtons?.forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const minutes = parseInt(e.target.dataset.sleep);
+        const minutes = parseInt(e.currentTarget.dataset.sleep, 10);
         this.startSleepTimer(minutes);
       });
     });
@@ -320,20 +464,6 @@ class PopupController {
     // Dark mode toggle
     this.buttons.darkModeToggle?.addEventListener('click', () => {
       this.toggleDarkMode();
-    });
-
-    // Seek bar functionality
-    this.buttons.seekBar?.addEventListener('input', (e) => {
-      const percentage = parseFloat(e.target.value);
-      this.seekToPercentage(percentage);
-    });
-
-    this.buttons.seekBar?.addEventListener('mousedown', () => {
-      this.isDragging = true;
-    });
-
-    this.buttons.seekBar?.addEventListener('mouseup', () => {
-      this.isDragging = false;
     });
 
     // Listen for background script messages
@@ -367,13 +497,48 @@ class PopupController {
     });
   }
 
+  setSvgIcon(targetEl, svgMarkup) {
+    if (!targetEl || !svgMarkup) return;
+    targetEl.textContent = '';
+    try {
+      const normalized = svgMarkup.includes('xmlns=')
+        ? svgMarkup
+        : svgMarkup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(normalized, 'image/svg+xml');
+      const svgEl = doc.documentElement;
+      if (svgEl && !doc.querySelector('parsererror') && svgEl.tagName.toLowerCase() === 'svg') {
+        targetEl.appendChild(document.importNode(svgEl, true));
+      }
+    } catch (e) {
+      console.error('[Icon] Failed to parse SVG icon:', e);
+    }
+  }
+
+  setButtonWithIcon(btnEl, svgMarkup, labelText) {
+    if (!btnEl) return;
+    btnEl.textContent = '';
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'icon';
+    iconWrap.style.display = 'inline-flex';
+    iconWrap.style.alignItems = 'center';
+    iconWrap.style.justifyContent = 'center';
+    iconWrap.style.lineHeight = '0';
+    this.setSvgIcon(iconWrap, svgMarkup);
+    const textSpan = document.createElement('span');
+    textSpan.textContent = labelText;
+    btnEl.appendChild(iconWrap);
+    btnEl.appendChild(textSpan);
+  }
+
   toggleHelp() {
     if (!this.buttons.helpPanel || !this.buttons.helpToggle) return;
 
     const isHidden = this.buttons.helpPanel.hidden;
     this.buttons.helpPanel.hidden = !isHidden;
     this.buttons.helpToggle.setAttribute('aria-expanded', String(isHidden));
-    this.buttons.helpToggle.textContent = isHidden ? 'Hide Help' : 'Help / Usage';
+    const labelTarget = this.buttons.helpToggleText || this.buttons.helpToggle;
+    labelTarget.textContent = isHidden ? 'Hide Help' : 'Help / Usage';
 
     if (isHidden) {
       console.log('[Help] opened');
@@ -416,6 +581,298 @@ class PopupController {
     this.addDebugLog('[Layout]', 'info', 'popupSize', 'popup size applied', { size: normalized });
   }
 
+  initReorderableSections() {
+    const container = this.buttons.sectionsContainer;
+    if (!container) return;
+
+    const sections = Array.from(container.querySelectorAll('.reorderable-section'));
+    sections.forEach(section => {
+      const sectionId = section.dataset.sectionId;
+      const titleBar = section.querySelector('.section-title');
+      if (!titleBar || !sectionId) return;
+
+      // Extract original label text
+      const existingLabel = titleBar.textContent.trim();
+      titleBar.textContent = '';
+
+      // Left side: drag handle + section icon + label
+      const leftWrap = document.createElement('div');
+      leftWrap.className = 'section-title-left';
+      leftWrap.title = 'Drag to reorder section, or click to collapse/expand';
+
+      const dragHandle = document.createElement('span');
+      dragHandle.className = 'section-drag-handle';
+      dragHandle.setAttribute('aria-hidden', 'true');
+      this.setSvgIcon(dragHandle, SVG_ICONS.grip);
+
+      const sectionIcon = document.createElement('span');
+      sectionIcon.className = 'section-icon';
+      sectionIcon.setAttribute('aria-hidden', 'true');
+      if (SVG_ICONS.sections[sectionId]) {
+        this.setSvgIcon(sectionIcon, SVG_ICONS.sections[sectionId]);
+      }
+
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = existingLabel;
+
+      leftWrap.appendChild(dragHandle);
+      leftWrap.appendChild(sectionIcon);
+      leftWrap.appendChild(labelSpan);
+
+      // Clicking the title label toggles collapse
+      leftWrap.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleSectionCollapse(sectionId);
+      });
+
+      // Right side: Move Up, Move Down, Collapse/Expand with SVG icons
+      const actionsWrap = document.createElement('div');
+      actionsWrap.className = 'section-header-actions';
+
+      const upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.className = 'section-order-btn move-up-btn';
+      upBtn.title = 'Move section up';
+      upBtn.setAttribute('aria-label', 'Move section up');
+      this.setSvgIcon(upBtn, SVG_ICONS.chevronUp);
+      upBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.moveSection(sectionId, -1);
+      });
+
+      const downBtn = document.createElement('button');
+      downBtn.type = 'button';
+      downBtn.className = 'section-order-btn move-down-btn';
+      downBtn.title = 'Move section down';
+      downBtn.setAttribute('aria-label', 'Move section down');
+      this.setSvgIcon(downBtn, SVG_ICONS.chevronDown);
+      downBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.moveSection(sectionId, 1);
+      });
+
+      const collapseBtn = document.createElement('button');
+      collapseBtn.type = 'button';
+      collapseBtn.className = 'section-collapse-btn';
+      collapseBtn.title = 'Collapse or expand section';
+      collapseBtn.setAttribute('aria-label', 'Collapse or expand section');
+      this.setSvgIcon(collapseBtn, SVG_ICONS.chevronDown);
+      collapseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleSectionCollapse(sectionId);
+      });
+
+      actionsWrap.appendChild(upBtn);
+      actionsWrap.appendChild(downBtn);
+      actionsWrap.appendChild(collapseBtn);
+
+      titleBar.appendChild(leftWrap);
+      titleBar.appendChild(actionsWrap);
+
+      // HTML5 Drag & Drop support on section via its header only
+      section.setAttribute('draggable', 'false');
+
+      leftWrap.addEventListener('mousedown', () => {
+        section.setAttribute('draggable', 'true');
+      });
+      leftWrap.addEventListener('mouseup', () => {
+        section.setAttribute('draggable', 'false');
+      });
+
+      section.addEventListener('dragstart', (e) => {
+        if (section.getAttribute('draggable') !== 'true') {
+          e.preventDefault();
+          return;
+        }
+        this.draggedSection = section;
+        section.classList.add('dragging');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', sectionId);
+        }
+      });
+
+      section.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!this.draggedSection || this.draggedSection === section) return;
+        section.classList.add('drag-over');
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = 'move';
+        }
+      });
+
+      section.addEventListener('dragleave', () => {
+        section.classList.remove('drag-over');
+      });
+
+      section.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        section.classList.remove('drag-over');
+        if (!this.draggedSection || this.draggedSection === section) return;
+
+        const allSections = Array.from(container.querySelectorAll('.reorderable-section'));
+        const draggedIdx = allSections.indexOf(this.draggedSection);
+        const targetIdx = allSections.indexOf(section);
+
+        if (draggedIdx < targetIdx) {
+          container.insertBefore(this.draggedSection, section.nextSibling);
+        } else {
+          container.insertBefore(this.draggedSection, section);
+        }
+
+        await this.saveSectionOrder();
+        this.updateSectionHeaderButtons();
+      });
+
+      section.addEventListener('dragend', () => {
+        section.setAttribute('draggable', 'false');
+        section.classList.remove('dragging');
+        container.querySelectorAll('.reorderable-section').forEach(s => s.classList.remove('drag-over'));
+        this.draggedSection = null;
+      });
+    });
+
+    this.updateSectionHeaderButtons();
+  }
+
+  async loadSectionLayout() {
+    const container = this.buttons.sectionsContainer;
+    if (!container) return;
+
+    try {
+      const stored = await browser.storage.local.get([SECTION_ORDER_KEY, COLLAPSED_SECTIONS_KEY]);
+      const savedOrder = Array.isArray(stored[SECTION_ORDER_KEY]) ? stored[SECTION_ORDER_KEY] : DEFAULT_SECTION_ORDER;
+      const savedCollapsed = Array.isArray(stored[COLLAPSED_SECTIONS_KEY]) ? stored[COLLAPSED_SECTIONS_KEY] : [];
+
+      this.collapsedSections = savedCollapsed;
+
+      // Reorder DOM elements according to savedOrder
+      const sectionMap = new Map();
+      Array.from(container.querySelectorAll('.reorderable-section')).forEach(el => {
+        sectionMap.set(el.dataset.sectionId, el);
+      });
+
+      const finalOrder = [
+        ...savedOrder.filter(id => sectionMap.has(id)),
+        ...DEFAULT_SECTION_ORDER.filter(id => sectionMap.has(id) && !savedOrder.includes(id))
+      ];
+
+      this.sectionOrder = finalOrder;
+      finalOrder.forEach(id => {
+        const el = sectionMap.get(id);
+        if (el) {
+          container.appendChild(el);
+          el.classList.toggle('is-collapsed', this.collapsedSections.includes(id));
+        }
+      });
+
+      this.updateSectionHeaderButtons();
+      this.addDebugLog('[Layout]', 'info', 'sectionLayout', 'loaded', {
+        order: this.sectionOrder,
+        collapsed: this.collapsedSections
+      });
+    } catch (error) {
+      this.addDebugLog('[Layout]', 'warn', 'sectionLayout', 'failed to load', { error: error.message });
+    }
+  }
+
+  async saveSectionOrder() {
+    const container = this.buttons.sectionsContainer;
+    if (!container) return;
+
+    this.sectionOrder = Array.from(container.querySelectorAll('.reorderable-section'))
+      .map(el => el.dataset.sectionId)
+      .filter(Boolean);
+
+    try {
+      await browser.storage.local.set({ [SECTION_ORDER_KEY]: this.sectionOrder });
+      this.addDebugLog('[Layout]', 'info', 'sectionOrder', 'saved', { order: this.sectionOrder });
+    } catch (error) {
+      this.addDebugLog('[Layout]', 'warn', 'sectionOrder', 'save failed', { error: error.message });
+    }
+  }
+
+  async moveSection(sectionId, direction) {
+    const container = this.buttons.sectionsContainer;
+    if (!container) return;
+
+    const sections = Array.from(container.querySelectorAll('.reorderable-section'));
+    const index = sections.findIndex(el => el.dataset.sectionId === sectionId);
+    if (index === -1) return;
+
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= sections.length) return;
+
+    const currentEl = sections[index];
+    const targetEl = sections[targetIndex];
+
+    if (direction < 0) {
+      container.insertBefore(currentEl, targetEl);
+    } else {
+      container.insertBefore(currentEl, targetEl.nextSibling);
+    }
+
+    await this.saveSectionOrder();
+    this.updateSectionHeaderButtons();
+  }
+
+  async toggleSectionCollapse(sectionId) {
+    const container = this.buttons.sectionsContainer;
+    if (!container) return;
+
+    const section = container.querySelector(`.reorderable-section[data-section-id="${sectionId}"]`);
+    if (!section) return;
+
+    const isCollapsed = section.classList.toggle('is-collapsed');
+    if (isCollapsed) {
+      if (!this.collapsedSections.includes(sectionId)) {
+        this.collapsedSections.push(sectionId);
+      }
+    } else {
+      this.collapsedSections = this.collapsedSections.filter(id => id !== sectionId);
+    }
+
+    this.updateSectionHeaderButtons();
+
+    try {
+      await browser.storage.local.set({ [COLLAPSED_SECTIONS_KEY]: this.collapsedSections });
+      this.addDebugLog('[Layout]', 'info', 'sectionCollapse', 'toggled', {
+        sectionId,
+        collapsed: isCollapsed
+      });
+    } catch (error) {
+      this.addDebugLog('[Layout]', 'warn', 'sectionCollapse', 'save failed', { error: error.message });
+    }
+  }
+
+  updateSectionHeaderButtons() {
+    const container = this.buttons.sectionsContainer;
+    if (!container) return;
+
+    const sections = Array.from(container.querySelectorAll('.reorderable-section'));
+    sections.forEach((section, idx) => {
+      const upBtn = section.querySelector('.move-up-btn');
+      const downBtn = section.querySelector('.move-down-btn');
+      const collapseBtn = section.querySelector('.section-collapse-btn');
+      const isCollapsed = section.classList.contains('is-collapsed');
+
+      if (upBtn) upBtn.disabled = idx === 0;
+      if (downBtn) downBtn.disabled = idx === sections.length - 1;
+      if (collapseBtn) {
+        collapseBtn.title = isCollapsed ? 'Expand section' : 'Collapse section';
+        collapseBtn.setAttribute('aria-expanded', String(!isCollapsed));
+      }
+    });
+  }
+
+  async resetSectionLayout() {
+    await browser.storage.local.remove([SECTION_ORDER_KEY, COLLAPSED_SECTIONS_KEY]);
+    this.collapsedSections = [];
+    this.sectionOrder = [...DEFAULT_SECTION_ORDER];
+    await this.loadSectionLayout();
+    this.showStatus('Section order and layout reset to default', 'success');
+  }
+
   async loadActiveTab() {
     try {
       // Try to load from storage first (set by background script)
@@ -444,12 +901,24 @@ class PopupController {
     }
   }
 
+  isYouTubeVideoUrl(url) {
+    return typeof url === 'string' && (
+      url.includes('youtube.com/watch') ||
+      url.includes('youtube.com/shorts/')
+    );
+  }
+
   async autoDetectYouTubeTab() {
     try {
       console.log('Popup: Starting YouTube tab auto-detection...');
-      // Get all YouTube tabs using correct patterns (both www and non-www)
+      // Get all YouTube tabs using correct patterns (both watch and shorts)
       const youtubeTabs = await browser.tabs.query({ 
-        url: ['*://*.youtube.com/watch*', '*://youtube.com/watch*']
+        url: [
+          '*://*.youtube.com/watch*',
+          '*://youtube.com/watch*',
+          '*://*.youtube.com/shorts/*',
+          '*://youtube.com/shorts/*'
+        ]
       });
 
       console.log('Popup: Found', youtubeTabs.length, 'YouTube tabs');
@@ -466,7 +935,7 @@ class PopupController {
         currentWindow: true 
       });
 
-      if (activeTab && activeTab.url.includes('youtube.com/watch')) {
+      if (activeTab && this.isYouTubeVideoUrl(activeTab.url)) {
         await this.testAndConnectToTab(activeTab.id, 'Connected to active YouTube tab');
         return;
       }
@@ -532,10 +1001,13 @@ class PopupController {
         this.isYouTubeTab = true;
         this.updateFailureCount = 0;
         await browser.storage.local.set({ activeTabId: tabId });
-        this.showStatus(message, 'success');
         this.updateUI();
+        if (message) {
+          this.updateStatusIndicator(message, 'success');
+        }
         this.addDebugLog('[Popup]', 'info', 'getPlayerState', 'initial getPlayerState requested', { tabId });
         await this.updatePlayerState({ initial: true, saveHistory: true });
+        await this.updateVideoStats();
         this.startUpdates();
         return true;
       }
@@ -543,7 +1015,7 @@ class PopupController {
       console.log('Popup: Ping failed:', error.message);
     }
     
-    this.showStatus('Content script not responding', 'error');
+    this.updateStatusIndicator('Content script not responding', 'error');
     return false;
   }
 
@@ -552,8 +1024,11 @@ class PopupController {
     this.isYouTubeTab = true;
     await browser.storage.local.set({ activeTabId: tabId });
     await this.updatePlayerState({ initial: true, saveHistory: true });
-    this.showStatus(message, 'success');
+    await this.updateVideoStats();
     this.updateUI();
+    if (message) {
+      this.updateStatusIndicator(message, 'success');
+    }
   }
 
   startAutoDetection() {
@@ -590,20 +1065,18 @@ class PopupController {
       this.updateInterval = null;
     }
 
-    // Update progress and time every second when connected
+    const intervalMs = Number(this.settings.updateInterval) || 1000;
+
+    // Update progress and time at the configured interval when connected
     this.updateInterval = setInterval(async () => {
       if (this.isYouTubeTab && this.activeTabId && !this.isDragging) {
         await this.updatePlayerState();
-        // Update stats every 2 seconds
+        // Update stats every ~2 ticks
         if (Math.random() > 0.5) {
           await this.updateVideoStats();
         }
-        // Auto-save position every 5 seconds if enabled
-        if (Math.floor(Date.now() / 5000) % 2 === 0) {
-          await this.savePlaybackPosition();
-        }
       }
-    }, 1000);
+    }, intervalMs);
   }
 
   stopTimeUpdates() {
@@ -615,70 +1088,6 @@ class PopupController {
 
   stopUpdates() {
     this.stopTimeUpdates();
-  }
-
-  async updateTimeDisplay() {
-    if (!this.activeTabId) return;
-
-    try {
-      const response = await browser.tabs.sendMessage(this.activeTabId, { 
-        action: 'getPlayerState' 
-      });
-
-      const ok = this.isSuccessfulResponse(response);
-      const state = this.getResponseResult(response);
-      if (ok && state?.isReady) {
-        
-        // Update time displays
-        if (this.buttons.currentTimeDisplay && state.currentTime !== undefined) {
-          this.buttons.currentTimeDisplay.textContent = this.formatTime(state.currentTime);
-        }
-        
-        if (this.buttons.durationDisplay && state.duration !== undefined) {
-          this.buttons.durationDisplay.textContent = this.formatTime(state.duration);
-        }
-
-        // Update seek bar with progress gradient
-        if (this.buttons.seekBar && state.duration > 0) {
-          const percentage = (state.currentTime / state.duration) * 100;
-          this.buttons.seekBar.value = percentage;
-          
-          // Update the progress gradient
-          const isDark = document.body.classList.contains('dark-mode');
-          const progressColor = '#6495ed';
-          const trackColor = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.4)';
-          
-          this.buttons.seekBar.style.background = 
-            `linear-gradient(to right, ${progressColor} 0%, ${progressColor} ${percentage}%, ${trackColor} ${percentage}%)`;
-        }
-
-      }
-    } catch (error) {
-      // Connection lost, will be handled by verification
-    }
-  }
-
-  async seekToPercentage(percentage) {
-    if (!this.activeTabId) return;
-
-    try {
-      const response = await browser.tabs.sendMessage(this.activeTabId, { 
-        action: 'getPlayerState' 
-      });
-
-      const ok = this.isSuccessfulResponse(response);
-      const state = this.getResponseResult(response);
-      if (ok && state?.duration) {
-        const seekTime = (percentage / 100) * state.duration;
-        
-        await browser.tabs.sendMessage(this.activeTabId, {
-          action: 'seekTo',
-          time: seekTime
-        });
-      }
-    } catch (error) {
-      // Connection lost, will be handled by verification
-    }
   }
 
   toggleDarkMode() {
@@ -791,6 +1200,8 @@ class PopupController {
         // Show success feedback for certain commands
         if (['clickNext', 'clickBack'].includes(command)) {
           this.showStatus(`${command === 'clickNext' ? 'Next' : 'Previous'} video`, 'success');
+        } else if (command === 'toggleCaptions') {
+          this.showStatus(response.state || 'Captions toggled', 'success');
         }
         this.addDebugLog('[Popup]', 'info', command, 'command succeeded');
       } else {
@@ -880,34 +1291,51 @@ class PopupController {
 
   updatePlayerUI(state) {
     this.videoInfo = state || {};
+    const shouldShowPause = state.isPlaying === true || state.paused === false;
+    const renderedAs = shouldShowPause ? 'Pause' : 'Play';
+    const playPauseSvg = shouldShowPause ? SVG_ICONS.pause : SVG_ICONS.play;
 
     // Update play/pause button
     if (this.buttons.stopButton) {
       const iconSpan = this.buttons.stopButton.querySelector('.icon');
       const textSpan = this.buttons.stopButton.querySelector('span:not(.icon)');
       
-      if (iconSpan && textSpan) {
-        const shouldShowPause = state.isPlaying === true || state.paused === false;
-        const renderedAs = shouldShowPause ? 'Pause' : 'Play';
-        iconSpan.textContent = shouldShowPause ? '||' : '>';
-        textSpan.textContent = renderedAs;
-        this.addDebugLog('[Popup]', 'info', 'renderPlayButton', 'play button rendered as Play/Pause', {
-          renderedAs,
-          paused: state.paused,
-          isPlaying: state.isPlaying
-        });
+      if (iconSpan) {
+        this.setSvgIcon(iconSpan, playPauseSvg);
       }
+      if (textSpan) {
+        textSpan.textContent = renderedAs;
+      }
+      this.buttons.stopButton.title = `${renderedAs} (Ctrl+Alt+P)`;
+      this.addDebugLog('[Popup]', 'info', 'renderPlayButton', 'play button rendered as Play/Pause', {
+        renderedAs,
+        paused: state.paused,
+        isPlaying: state.isPlaying
+      });
+    }
+
+    if (this.buttons.thumbCenterBadge) {
+      this.setSvgIcon(this.buttons.thumbCenterBadge, playPauseSvg);
     }
     
     // Update mute button
     if (this.buttons.muteButton) {
       const iconSpan = this.buttons.muteButton.querySelector('.icon');
       const textSpan = this.buttons.muteButton.querySelector('span:not(.icon)');
+      const muteSvg = state.isMuted ? SVG_ICONS.volumeMuted : SVG_ICONS.volumeHigh;
       
-      if (iconSpan && textSpan) {
-        iconSpan.textContent = state.isMuted ? 'M-' : 'M';
+      if (iconSpan) {
+        this.setSvgIcon(iconSpan, muteSvg);
+      }
+      if (textSpan) {
         textSpan.textContent = state.isMuted ? 'Unmute' : 'Mute';
       }
+      this.buttons.muteButton.title = `${state.isMuted ? 'Unmute' : 'Mute'} (Ctrl+Alt+M)`;
+    }
+
+    // Update captions button active state
+    if (this.buttons.captionsToggle) {
+      this.updateToggleUI('captionsToggle', state.captionsEnabled === true);
     }
 
     // Update video info
@@ -964,6 +1392,7 @@ class PopupController {
   updateVolumeUI() {
     if (this.buttons.volumeSlider) {
       this.buttons.volumeSlider.value = this.currentVolume;
+      this.buttons.volumeSlider.style.setProperty('--volume-pct', `${this.currentVolume}%`);
     }
     if (this.buttons.volumeValue) {
       this.buttons.volumeValue.textContent = `${this.currentVolume}%`;
@@ -1130,6 +1559,14 @@ class PopupController {
       button.className = 'resume-entry';
       button.dataset.videoId = entry.videoId;
 
+      const iconWrap = document.createElement('span');
+      iconWrap.className = 'resume-entry-icon';
+      iconWrap.setAttribute('aria-hidden', 'true');
+      this.setSvgIcon(iconWrap, SVG_ICONS.playCircle);
+
+      const textWrap = document.createElement('span');
+      textWrap.className = 'resume-entry-text';
+
       const title = document.createElement('span');
       title.className = 'resume-title';
       title.textContent = entry.title || 'Untitled video';
@@ -1138,8 +1575,10 @@ class PopupController {
       meta.className = 'resume-meta';
       meta.textContent = this.formatHistoryMeta(entry);
 
-      button.appendChild(title);
-      button.appendChild(meta);
+      textWrap.appendChild(title);
+      textWrap.appendChild(meta);
+      button.appendChild(iconWrap);
+      button.appendChild(textWrap);
       button.addEventListener('click', () => this.openResumeEntry(entry));
       this.buttons.resumeList.appendChild(button);
     });
@@ -1228,18 +1667,25 @@ class PopupController {
 
   setProfileStatus(message, type = 'info') {
     const colors = {
-      success: '#4CAF50',
-      error: '#f44336',
-      warning: '#ff9800',
-      info: '#2196F3'
+      success: 'var(--success)',
+      error: 'var(--danger)',
+      warning: 'var(--warning)',
+      info: 'var(--info)'
     };
 
     if (this.buttons.profileStatus) {
       this.buttons.profileStatus.textContent = message;
       this.buttons.profileStatus.style.color = colors[type] || colors.info;
-    } else {
-      this.showStatus(message, type);
+      if (this.profileStatusTimeout) {
+        clearTimeout(this.profileStatusTimeout);
+      }
+      this.profileStatusTimeout = setTimeout(() => {
+        if (this.buttons.profileStatus) {
+          this.buttons.profileStatus.textContent = '';
+        }
+      }, 3500);
     }
+    this.showStatus(message, type);
   }
 
   async getProfileContext() {
@@ -1444,15 +1890,18 @@ class PopupController {
       this.buttons.currentVideoChannel.textContent = channelName;
     }
 
-    if (this.buttons.currentVideoTime) {
-      const timeText = duration > 0
-        ? `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`
-        : '--:-- / --:--';
-      this.buttons.currentVideoTime.textContent = timeText;
-    }
+    if (!this.isDragging) {
+      if (this.buttons.currentVideoTime) {
+        const timeText = duration > 0
+          ? `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`
+          : '--:-- / --:--';
+        this.buttons.currentVideoTime.textContent = timeText;
+      }
 
-    if (this.buttons.currentVideoProgressBar) {
-      this.buttons.currentVideoProgressBar.value = Math.round(progress * 10);
+      if (this.buttons.currentVideoProgressBar) {
+        this.buttons.currentVideoProgressBar.value = Math.round(progress * 10);
+        this.buttons.currentVideoProgressBar.style.setProperty('--progress-pct', `${progress.toFixed(1)}%`);
+      }
     }
 
     if (this.buttons.currentVideoThumbnail && this.buttons.currentVideoThumbnailPlaceholder) {
@@ -1642,12 +2091,6 @@ class PopupController {
     }
   }
 
-  formatTime(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  }
-
   // NEW: Advanced toggle features
   async toggleAutoPause() {
     this.settings.autoPause = !this.settings.autoPause;
@@ -1737,7 +2180,7 @@ class PopupController {
     const modalCloseBtn = document.createElement('button');
     modalCloseBtn.className = 'close-btn';
     modalCloseBtn.id = 'modal-close-btn';
-    modalCloseBtn.textContent = 'Close';
+    this.setButtonWithIcon(modalCloseBtn, SVG_ICONS.close, 'Close');
     
     modalHeader.appendChild(headerTitle);
     modalHeader.appendChild(modalCloseBtn);
@@ -1795,6 +2238,7 @@ class PopupController {
     darkModeDiv.appendChild(darkModeDesc);
     
     // Volume step setting
+    const currentVolumeStep = String(this.settings.volumeStep || 10);
     const volumeDiv = document.createElement('div');
     volumeDiv.className = 'setting-item';
     const volumeLabel = document.createElement('label');
@@ -1806,7 +2250,7 @@ class PopupController {
       const option = document.createElement('option');
       option.value = value;
       option.textContent = value + '%';
-      if (value === '10') option.selected = true;
+      if (value === currentVolumeStep) option.selected = true;
       volumeSelect.appendChild(option);
     });
     const volumeDesc = document.createElement('p');
@@ -1817,6 +2261,7 @@ class PopupController {
     volumeDiv.appendChild(volumeDesc);
     
     // Update interval setting
+    const currentUpdateInterval = String(this.settings.updateInterval || 1000);
     const intervalDiv = document.createElement('div');
     intervalDiv.className = 'setting-item';
     const intervalLabel = document.createElement('label');
@@ -1828,7 +2273,7 @@ class PopupController {
       const option = document.createElement('option');
       option.value = value;
       option.textContent = text;
-      if (value === '1000') option.selected = true;
+      if (value === currentUpdateInterval) option.selected = true;
       intervalSelect.appendChild(option);
     });
     const intervalDesc = document.createElement('p');
@@ -1838,7 +2283,7 @@ class PopupController {
     intervalDiv.appendChild(intervalSelect);
     intervalDiv.appendChild(intervalDesc);
     
-    // Shortcuts button
+    // Shortcuts & Reset Layout buttons
     const shortcutsDiv = document.createElement('div');
     shortcutsDiv.className = 'setting-item';
     const modalShortcutsBtn = document.createElement('button');
@@ -1846,12 +2291,26 @@ class PopupController {
     modalShortcutsBtn.id = 'shortcuts-btn';
     modalShortcutsBtn.style.width = '100%';
     modalShortcutsBtn.style.marginTop = '10px';
-    modalShortcutsBtn.textContent = 'View Keyboard Shortcuts';
+    this.setButtonWithIcon(modalShortcutsBtn, SVG_ICONS.keyboard, 'View Keyboard Shortcuts');
     const shortcutsDesc = document.createElement('p');
     shortcutsDesc.className = 'setting-desc';
     shortcutsDesc.textContent = 'View all available keyboard shortcuts and how to customize them';
     shortcutsDiv.appendChild(modalShortcutsBtn);
     shortcutsDiv.appendChild(shortcutsDesc);
+
+    const resetLayoutDiv = document.createElement('div');
+    resetLayoutDiv.className = 'setting-item';
+    const resetLayoutBtn = document.createElement('button');
+    resetLayoutBtn.className = 'btn secondary';
+    resetLayoutBtn.id = 'reset-layout-btn';
+    resetLayoutBtn.style.width = '100%';
+    resetLayoutBtn.style.marginTop = '6px';
+    this.setButtonWithIcon(resetLayoutBtn, SVG_ICONS.reset, 'Reset Section Order & Layout');
+    const resetLayoutDesc = document.createElement('p');
+    resetLayoutDesc.className = 'setting-desc';
+    resetLayoutDesc.textContent = 'Restore default section order and expand all collapsed sections';
+    resetLayoutDiv.appendChild(resetLayoutBtn);
+    resetLayoutDiv.appendChild(resetLayoutDesc);
     
     // Append all settings to modal body
     modalBody.appendChild(autoDetectDiv);
@@ -1860,6 +2319,7 @@ class PopupController {
     modalBody.appendChild(volumeDiv);
     modalBody.appendChild(intervalDiv);
     modalBody.appendChild(shortcutsDiv);
+    modalBody.appendChild(resetLayoutDiv);
     
     // Footer
     const modalFooter = document.createElement('div');
@@ -1868,12 +2328,12 @@ class PopupController {
     const modalSaveBtn = document.createElement('button');
     modalSaveBtn.className = 'btn primary';
     modalSaveBtn.id = 'modal-save-btn';
-    modalSaveBtn.textContent = 'Save Changes';
+    this.setButtonWithIcon(modalSaveBtn, SVG_ICONS.check, 'Save Changes');
     
     const modalCancelBtn = document.createElement('button');
     modalCancelBtn.className = 'btn secondary';
     modalCancelBtn.id = 'modal-cancel-btn';
-    modalCancelBtn.textContent = 'Cancel';
+    this.setButtonWithIcon(modalCancelBtn, SVG_ICONS.close, 'Cancel');
     
     modalFooter.appendChild(modalSaveBtn);
     modalFooter.appendChild(modalCancelBtn);
@@ -1893,9 +2353,6 @@ class PopupController {
         behavior: 'smooth'
       });
     };
-
-    // DON'T prevent body scroll - let users scroll normally
-    // document.body.style.overflow = 'hidden'; // REMOVED
 
     // Set initial styles for animation
     modal.style.display = 'flex';
@@ -1917,7 +2374,14 @@ class PopupController {
     const saveBtn = modal.querySelector('#modal-save-btn');
     const cancelBtn = modal.querySelector('#modal-cancel-btn');
 
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+
     const closeModal = () => {
+      document.removeEventListener('keydown', handleEscape);
       // Add smooth close animation
       modal.style.opacity = '0';
       modal.style.transform = 'scale(0.9)';
@@ -1941,6 +2405,7 @@ class PopupController {
     });
 
     saveBtn.addEventListener('click', () => {
+      document.removeEventListener('keydown', handleEscape);
       this.saveModalSettings();
     });
 
@@ -1950,13 +2415,12 @@ class PopupController {
       this.showShortcuts();
     });
 
+    const resetBtn = modal.querySelector('#reset-layout-btn');
+    resetBtn?.addEventListener('click', async () => {
+      await this.resetSectionLayout();
+    });
+
     // Close modal with Escape key
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') {
-        closeModal();
-        document.removeEventListener('keydown', handleEscape);
-      }
-    };
     document.addEventListener('keydown', handleEscape);
   }
 
@@ -1964,12 +2428,20 @@ class PopupController {
     const autoDetect = document.getElementById('autoDetectSetting').checked;
     const autoPause = document.getElementById('autoPauseSetting').checked;
     const darkMode = document.getElementById('darkModeSetting').checked;
-    const volumeStep = parseInt(document.getElementById('volumeStepSetting').value);
-    const updateInterval = parseInt(document.getElementById('updateIntervalSetting').value);
+    const volumeStep = parseInt(document.getElementById('volumeStepSetting').value, 10);
+    const updateInterval = parseInt(document.getElementById('updateIntervalSetting').value, 10);
 
     // Update settings
     this.settings.autoDetect = autoDetect;
-    this.settings.autoPause = autoPause;
+
+    if (this.settings.autoPause !== autoPause) {
+      this.settings.autoPause = autoPause;
+      this.updateAllToggles();
+      browser.runtime.sendMessage({
+        type: 'SET_AUTO_PAUSE',
+        enabled: this.settings.autoPause
+      }).catch(() => {});
+    }
     
     if (this.settings.darkMode !== darkMode) {
       this.settings.darkMode = darkMode;
@@ -2014,6 +2486,11 @@ class PopupController {
 
   // Show keyboard shortcuts in a modal
   showShortcuts() {
+    const existingShortcutsModal = document.getElementById('shortcutsModal');
+    if (existingShortcutsModal) {
+      existingShortcutsModal.remove();
+    }
+
     const shortcuts = [
       { key: 'Ctrl+Alt+P', action: 'Play/Pause Video', description: 'Toggle video playback' },
       { key: 'Ctrl+Alt+S', action: 'Stop Video', description: 'Stop video playback' },
@@ -2029,17 +2506,8 @@ class PopupController {
       { key: 'Ctrl+Alt+B', action: 'Skip Backward', description: 'Skip backward 10 seconds' }
     ];
 
-    const shortcutsHTML = shortcuts.map(shortcut => 
-      `<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #333;">
-        <div>
-          <strong style="color: #6495ed;">${shortcut.key}</strong>
-          <div style="font-size: 12px; color: #aaa; margin-top: 2px;">${shortcut.description}</div>
-        </div>
-        <div style="font-weight: 500;">${shortcut.action}</div>
-      </div>`
-    ).join('');
-
     const modal = document.createElement('div');
+    modal.id = 'shortcutsModal';
     modal.className = 'modal-overlay';
     
     // Create modal structure using DOM methods
@@ -2057,7 +2525,7 @@ class PopupController {
     const shortcutsCloseBtn = document.createElement('button');
     shortcutsCloseBtn.className = 'close-btn';
     shortcutsCloseBtn.id = 'close-shortcuts-modal';
-    shortcutsCloseBtn.innerHTML = '&times;';
+    this.setButtonWithIcon(shortcutsCloseBtn, SVG_ICONS.close, 'Close');
     
     shortcutsModalHeader.appendChild(shortcutsTitle);
     shortcutsModalHeader.appendChild(shortcutsCloseBtn);
@@ -2070,9 +2538,9 @@ class PopupController {
     
     // Description
     const shortcutsDesc = document.createElement('p');
-    shortcutsDesc.style.marginBottom = '20px';
-    shortcutsDesc.style.color = '#aaa';
-    shortcutsDesc.style.fontSize = '14px';
+    shortcutsDesc.style.marginBottom = '12px';
+    shortcutsDesc.style.color = 'var(--text-secondary)';
+    shortcutsDesc.style.fontSize = '12px';
     shortcutsDesc.textContent = 'These keyboard shortcuts work when you\'re on a YouTube page with this extension active.';
     shortcutsModalBody.appendChild(shortcutsDesc);
     
@@ -2083,16 +2551,18 @@ class PopupController {
       shortcutDiv.style.justifyContent = 'space-between';
       shortcutDiv.style.alignItems = 'center';
       shortcutDiv.style.padding = '8px 0';
-      shortcutDiv.style.borderBottom = '1px solid #333';
+      shortcutDiv.style.borderBottom = '1px solid var(--border-subtle)';
       
       const leftDiv = document.createElement('div');
       const keyStrong = document.createElement('strong');
-      keyStrong.style.color = '#6495ed';
+      keyStrong.style.color = 'var(--accent)';
+      keyStrong.style.fontFamily = "'JetBrains Mono', monospace";
+      keyStrong.style.fontSize = '11.5px';
       keyStrong.textContent = shortcut.key;
       
       const descDiv = document.createElement('div');
-      descDiv.style.fontSize = '12px';
-      descDiv.style.color = '#aaa';
+      descDiv.style.fontSize = '11px';
+      descDiv.style.color = 'var(--text-muted)';
       descDiv.style.marginTop = '2px';
       descDiv.textContent = shortcut.description;
       
@@ -2100,7 +2570,8 @@ class PopupController {
       leftDiv.appendChild(descDiv);
       
       const rightDiv = document.createElement('div');
-      rightDiv.style.fontWeight = '500';
+      rightDiv.style.fontWeight = '600';
+      rightDiv.style.fontSize = '11.5px';
       rightDiv.textContent = shortcut.action;
       
       shortcutDiv.appendChild(leftDiv);
@@ -2110,22 +2581,23 @@ class PopupController {
     
     // Tips section
     const tipsDiv = document.createElement('div');
-    tipsDiv.style.marginTop = '20px';
-    tipsDiv.style.padding = '15px';
-    tipsDiv.style.background = '#2a2a2a';
+    tipsDiv.style.marginTop = '14px';
+    tipsDiv.style.padding = '12px';
+    tipsDiv.style.background = 'var(--bg-elevated)';
     tipsDiv.style.borderRadius = '8px';
-    tipsDiv.style.borderLeft = '4px solid #6495ed';
+    tipsDiv.style.borderLeft = '3px solid var(--accent)';
     
     const tipsTitle = document.createElement('h4');
-    tipsTitle.style.margin = '0 0 10px 0';
-    tipsTitle.style.color = '#6495ed';
+    tipsTitle.style.margin = '0 0 6px 0';
+    tipsTitle.style.color = 'var(--accent)';
+    tipsTitle.style.fontSize = '12px';
     tipsTitle.textContent = 'Customizing Shortcuts';
     
     const tipsText = document.createElement('p');
     tipsText.style.margin = '0';
-    tipsText.style.fontSize = '14px';
-    tipsText.style.color = '#ccc';
-    tipsText.innerHTML = 'To customize these shortcuts in Firefox:<br>1. Go to <strong>about:addons</strong><br>2. Click on this extension<br>3. Go to "Preferences" or "Options"<br>4. Look for "Manage Extension Shortcuts"';
+    tipsText.style.fontSize = '11.5px';
+    tipsText.style.color = 'var(--text-secondary)';
+    tipsText.textContent = 'To customize in Firefox: open about:addons → click the gear icon → Manage Extension Shortcuts.';
     
     tipsDiv.appendChild(tipsTitle);
     tipsDiv.appendChild(tipsText);
@@ -2138,7 +2610,7 @@ class PopupController {
     const shortcutsCloseFooterBtn = document.createElement('button');
     shortcutsCloseFooterBtn.className = 'btn secondary';
     shortcutsCloseFooterBtn.id = 'close-shortcuts-btn';
-    shortcutsCloseFooterBtn.textContent = 'Close';
+    this.setButtonWithIcon(shortcutsCloseFooterBtn, SVG_ICONS.close, 'Close');
     
     shortcutsModalFooter.appendChild(shortcutsCloseFooterBtn);
     
@@ -2158,9 +2630,6 @@ class PopupController {
       });
     };
 
-    // DON'T prevent body scroll - let users scroll normally
-    // document.body.style.overflow = 'hidden'; // REMOVED
-
     // Add entrance animation and scroll
     modal.style.opacity = '0';
     modal.style.transform = 'scale(0.9)';
@@ -2175,16 +2644,23 @@ class PopupController {
       modal.style.transform = 'scale(1)';
     }, 100);
 
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+
     // Close modal functionality
     const closeModal = () => {
+      document.removeEventListener('keydown', handleEscape);
       // Add smooth close animation
       modal.style.opacity = '0';
       modal.style.transform = 'scale(0.9)';
       
       setTimeout(() => {
-        document.body.removeChild(modal);
-        // DON'T restore body scroll since we're not blocking it
-        // document.body.style.overflow = ''; // REMOVED
+        if (modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
       }, 300);
     };
 
@@ -2199,12 +2675,6 @@ class PopupController {
     });
 
     // Close with Escape key
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') {
-        closeModal();
-        document.removeEventListener('keydown', handleEscape);
-      }
-    };
     document.addEventListener('keydown', handleEscape);
   }
 
@@ -2212,16 +2682,28 @@ class PopupController {
   updateStatusIndicator(message, type = 'info') {
     if (this.buttons.statusIndicator) {
       this.buttons.statusIndicator.textContent = message;
-      
-      // Add visual feedback based on type
-      const colors = {
-        success: '#4CAF50',
-        error: '#f44336',
-        warning: '#ff9800',
-        info: '#2196F3'
-      };
-      
-      this.buttons.statusIndicator.style.color = colors[type] || colors.info;
+      this.buttons.statusIndicator.style.color = '';
+    }
+
+    const statusBar = this.buttons.statusIndicator?.closest('.top-status-bar');
+    if (statusBar) {
+      statusBar.classList.remove('is-connected', 'is-error');
+      if (type === 'success') {
+        statusBar.classList.add('is-connected');
+      } else if (type === 'error') {
+        statusBar.classList.add('is-error');
+      }
+    }
+
+    if (this.buttons.statusDot) {
+      this.buttons.statusDot.classList.remove('is-connected', 'is-error', 'is-info');
+      if (type === 'success') {
+        this.buttons.statusDot.classList.add('is-connected');
+      } else if (type === 'error') {
+        this.buttons.statusDot.classList.add('is-error');
+      } else if (type === 'info') {
+        this.buttons.statusDot.classList.add('is-info');
+      }
     }
   }
 
@@ -2242,10 +2724,10 @@ class PopupController {
           
           if (iconSpan && textSpan) {
             if (state.includes('Unmute')) {
-              iconSpan.textContent = 'M-';
+              this.setSvgIcon(iconSpan, SVG_ICONS.volumeMuted);
               textSpan.textContent = 'Unmute';
             } else if (state.includes('Mute')) {
-              iconSpan.textContent = 'M';
+              this.setSvgIcon(iconSpan, SVG_ICONS.volumeHigh);
               textSpan.textContent = 'Mute';
             }
           }
@@ -2315,9 +2797,11 @@ class PopupController {
     const controlButtons = [
       this.buttons.nextButton, this.buttons.stopButton, 
       this.buttons.backButton, this.buttons.muteButton,
+      this.buttons.thumbnailPlayArea, this.buttons.currentVideoProgressBar,
       this.buttons.volumeSlider, this.buttons.volumeUp, this.buttons.volumeDown,
       this.buttons.saveChannelProfile, this.buttons.clearChannelProfile,
-      this.buttons.saveGlobalProfile, this.buttons.applyGlobalProfile
+      this.buttons.saveGlobalProfile, this.buttons.applyGlobalProfile,
+      this.buttons.captionsToggle
     ];
 
     if (this.isYouTubeTab && this.activeTabId) {
@@ -2325,19 +2809,20 @@ class PopupController {
       controlButtons.forEach(button => {
         if (button) {
           button.disabled = false;
-          button.style.opacity = '1';
+          button.style.opacity = '';
         }
       });
       
       // Enable speed buttons
       this.speedButtons.forEach(btn => {
         btn.disabled = false;
-        btn.style.opacity = '1';
+        btn.style.opacity = '';
       });
       
       // Update get tab button
       if (this.buttons.getTabButton) {
-        this.buttons.getTabButton.textContent = 'Rescan Tabs';
+        const labelEl = this.buttons.getTabButtonText || this.buttons.getTabButton;
+        labelEl.textContent = 'Rescan';
         this.buttons.getTabButton.classList.add('primary');
         this.buttons.getTabButton.title = 'Click to rescan for YouTube tabs';
       }
@@ -2352,19 +2837,23 @@ class PopupController {
       controlButtons.forEach(button => {
         if (button) {
           button.disabled = true;
-          button.style.opacity = '0.5';
+          button.style.opacity = '';
         }
       });
+      if (this.buttons.captionsToggle) {
+        this.buttons.captionsToggle.classList.remove('active');
+      }
       
       // Disable speed buttons
       this.speedButtons.forEach(btn => {
         btn.disabled = true;
-        btn.style.opacity = '0.5';
+        btn.style.opacity = '';
       });
       
       // Reset get tab button
       if (this.buttons.getTabButton) {
-        this.buttons.getTabButton.textContent = 'Find YouTube Tab';
+        const labelEl = this.buttons.getTabButtonText || this.buttons.getTabButton;
+        labelEl.textContent = 'Find Tab';
         this.buttons.getTabButton.classList.remove('primary');
         this.buttons.getTabButton.title = 'Click to search for YouTube tabs';
       }
@@ -2380,113 +2869,152 @@ class PopupController {
   }
 
   showStatus(message, type = 'info') {
-    // Create or update status element
+    if (!message) return;
+
     let statusEl = document.getElementById('status');
     if (!statusEl) {
       statusEl = document.createElement('div');
       statusEl.id = 'status';
-      statusEl.style.cssText = `
-        position: fixed;
-        top: 5px;
-        left: 5px;
-        right: 5px;
-        padding: 5px;
-        border-radius: 3px;
-        font-size: 11px;
-        text-align: center;
-        z-index: 1000;
-        transition: opacity 0.3s;
-      `;
+      statusEl.className = 'status-toast';
+
+      const dotEl = document.createElement('span');
+      dotEl.className = 'status-toast-dot';
+      dotEl.setAttribute('aria-hidden', 'true');
+
+      const textEl = document.createElement('span');
+      textEl.className = 'status-toast-text';
+
+      statusEl.appendChild(dotEl);
+      statusEl.appendChild(textEl);
       document.body.appendChild(statusEl);
     }
 
-    // Set color based on type
-    const colors = {
-      success: '#4CAF50',
-      error: '#f44336',
-      warning: '#ff9800',
-      info: '#2196F3'
-    };
-
-    statusEl.textContent = message;
-    statusEl.style.backgroundColor = colors[type] || colors.info;
-    statusEl.style.color = 'white';
-    statusEl.style.opacity = '1';
-
-    // Auto-hide after 3 seconds
-    setTimeout(() => {
-      if (statusEl) {
-        statusEl.style.opacity = '0';
-        setTimeout(() => {
-          if (statusEl && statusEl.parentNode) {
-            statusEl.parentNode.removeChild(statusEl);
-          }
-        }, 300);
-      }
-    }, 3000);
-  }
-
-  // New easy feature: Copy video info
-  // New medium feature: Sleep Timer
-  startSleepTimer(minutes) {
-    if (this.sleepTimerId) {
-      clearTimeout(this.sleepTimerId);
-      clearInterval(this.sleepCountdownInterval);
+    statusEl.dataset.type = type || 'info';
+    const textEl = statusEl.querySelector('.status-toast-text');
+    if (textEl) {
+      textEl.textContent = message;
+    } else {
+      statusEl.textContent = message;
     }
 
-    const milliseconds = minutes * 60 * 1000;
-    let remainingMs = milliseconds;
+    if (this.statusToastTimeout) {
+      clearTimeout(this.statusToastTimeout);
+    }
+    if (this.statusToastRemoveTimeout) {
+      clearTimeout(this.statusToastRemoveTimeout);
+    }
 
-    // Show timer display
-    this.buttons.sleepTimerDisplay.style.display = 'block';
-    this.buttons.cancelSleepBtn.style.display = 'block';
+    requestAnimationFrame(() => {
+      if (statusEl) {
+        statusEl.classList.add('is-visible');
+      }
+    });
 
-    // Update countdown display
+    this.statusToastTimeout = setTimeout(() => {
+      if (statusEl) {
+        statusEl.classList.remove('is-visible');
+        this.statusToastRemoveTimeout = setTimeout(() => {
+          if (statusEl && statusEl.parentNode && !statusEl.classList.contains('is-visible')) {
+            statusEl.parentNode.removeChild(statusEl);
+          }
+        }, 240);
+      }
+    }, 2200);
+  }
+
+  // Sleep Timer (backed by background script so it survives popup close)
+  async syncSleepTimer() {
+    try {
+      const response = await browser.runtime.sendMessage({ type: 'GET_SLEEP_TIMER' });
+      if (response?.success && response.endTime && response.endTime > Date.now()) {
+        this.startSleepCountdown(response.endTime);
+      } else {
+        this.stopSleepCountdownUI();
+      }
+    } catch (error) {
+      this.stopSleepCountdownUI();
+    }
+  }
+
+  async startSleepTimer(minutes) {
+    try {
+      const response = await browser.runtime.sendMessage({
+        type: 'START_SLEEP_TIMER',
+        minutes
+      });
+      if (response?.success && response.endTime) {
+        this.startSleepCountdown(response.endTime);
+        this.showStatus(`Sleep timer set to ${minutes} minutes`, 'info');
+      } else {
+        this.showStatus(response?.error || 'Failed to start sleep timer', 'error');
+      }
+    } catch (error) {
+      this.showStatus('Failed to start sleep timer', 'error');
+    }
+  }
+
+  startSleepCountdown(endTime) {
+    if (this.sleepCountdownInterval) {
+      clearInterval(this.sleepCountdownInterval);
+      this.sleepCountdownInterval = null;
+    }
+
+    this.sleepTimerEndTime = endTime;
+    if (this.buttons.sleepTimerDisplay) {
+      this.buttons.sleepTimerDisplay.style.display = 'block';
+    }
+    if (this.buttons.cancelSleepBtn) {
+      this.buttons.cancelSleepBtn.style.display = 'inline-flex';
+    }
+
     const updateCountdown = () => {
+      const remainingMs = Math.max(0, this.sleepTimerEndTime - Date.now());
+      if (remainingMs <= 0) {
+        this.stopSleepCountdownUI();
+        this.showStatus('Sleep timer expired - pausing videos', 'info');
+        setTimeout(() => this.updatePlayerState(), 200);
+        return;
+      }
       const mins = Math.floor(remainingMs / 60000);
       const secs = Math.floor((remainingMs % 60000) / 1000);
-      this.buttons.sleepCountdown.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      if (this.buttons.sleepCountdown) {
+        this.buttons.sleepCountdown.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
     };
 
     updateCountdown();
-    this.showStatus(`Sleep timer set to ${minutes} minutes`, 'info');
-
-    // Update countdown every second
-    this.sleepCountdownInterval = setInterval(() => {
-      remainingMs -= 1000;
-      if (remainingMs <= 0) {
-        clearInterval(this.sleepCountdownInterval);
-        this.pauseAllVideos();
-        return;
-      }
-      updateCountdown();
-    }, 1000);
-
-    // Pause after timer expires
-    this.sleepTimerId = setTimeout(() => {
-      this.pauseAllVideos();
-      this.showStatus('Sleep timer expired - pausing videos', 'info');
-      this.buttons.sleepTimerDisplay.style.display = 'none';
-      this.buttons.cancelSleepBtn.style.display = 'none';
-    }, milliseconds);
+    this.sleepCountdownInterval = setInterval(updateCountdown, 1000);
   }
 
-  cancelSleepTimer() {
-    if (this.sleepTimerId) {
-      clearTimeout(this.sleepTimerId);
+  stopSleepCountdownUI() {
+    if (this.sleepCountdownInterval) {
       clearInterval(this.sleepCountdownInterval);
-      this.sleepTimerId = null;
-      this.buttons.sleepTimerDisplay.style.display = 'none';
-      this.buttons.cancelSleepBtn.style.display = 'none';
-      this.showStatus('Sleep timer cancelled', 'info');
+      this.sleepCountdownInterval = null;
     }
+    this.sleepTimerEndTime = null;
+    if (this.buttons.sleepTimerDisplay) {
+      this.buttons.sleepTimerDisplay.style.display = 'none';
+    }
+    if (this.buttons.cancelSleepBtn) {
+      this.buttons.cancelSleepBtn.style.display = 'none';
+    }
+  }
+
+  async cancelSleepTimer() {
+    try {
+      await browser.runtime.sendMessage({ type: 'CANCEL_SLEEP_TIMER' });
+    } catch (error) {
+      // Ignore error
+    }
+    this.stopSleepCountdownUI();
+    this.showStatus('Sleep timer cancelled', 'info');
   }
 
   async pauseAllVideos() {
     if (this.activeTabId) {
       try {
         await browser.tabs.sendMessage(this.activeTabId, {
-          action: 'clickPlayPause'
+          action: 'pauseIfPlaying'
         });
       } catch (error) {
         // Tab may no longer exist
@@ -2494,11 +3022,13 @@ class PopupController {
     }
   }
 
-  // New medium feature: Auto-Play Toggle
-  // New medium feature: Video Stats Display
+  // Video Stats Display
   async updateVideoStats() {
     if (!this.activeTabId || !this.isYouTubeTab) {
-      this.buttons.statsPanel.style.display = 'none';
+      if (this.buttons.statsDuration) this.buttons.statsDuration.textContent = '--:--';
+      if (this.buttons.statsProgress) this.buttons.statsProgress.textContent = '0%';
+      if (this.buttons.statsBitrate) this.buttons.statsBitrate.textContent = 'N/A';
+      if (this.buttons.statsResolution) this.buttons.statsResolution.textContent = 'N/A';
       return;
     }
 
@@ -2513,15 +3043,17 @@ class PopupController {
         this.buttons.statsProgress.textContent = `${stats.progress}%`;
         this.buttons.statsBitrate.textContent = stats.bitrate;
         this.buttons.statsResolution.textContent = stats.resolution;
-        this.buttons.statsPanel.style.display = 'block';
+        if (this.buttons.statsPanel) {
+          this.buttons.statsPanel.style.display = 'grid';
+        }
       }
     } catch (error) {
-      this.buttons.statsPanel.style.display = 'none';
+      // Keep last known or default stats visible inside section
     }
   }
 
   formatTime(seconds) {
-    if (!seconds || isNaN(seconds)) return '--:--';
+    if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return '--:--';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
@@ -2530,36 +3062,6 @@ class PopupController {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  // Auto-save playback position
-  async savePlaybackPosition() {
-    if (!this.activeTabId || !this.settings.rememberPosition) {
-      return;
-    }
-
-    try {
-      await browser.tabs.sendMessage(this.activeTabId, {
-        action: 'savePlaybackPosition'
-      });
-    } catch (error) {
-      // Silently fail, tab may not be available
-    }
-  }
-
-  // Resume playback from saved position
-  async resumePlaybackPosition() {
-    if (!this.activeTabId || !this.settings.rememberPosition) {
-      return;
-    }
-
-    try {
-      await browser.tabs.sendMessage(this.activeTabId, {
-        action: 'resumePlaybackPosition'
-      });
-    } catch (error) {
-      // Silently fail
-    }
   }
 }
 
@@ -2578,6 +3080,7 @@ window.addEventListener('beforeunload', () => {
     window.popupController.stopAutoDetection();
     window.popupController.stopTimeUpdates();
     window.popupController.stopHistoryTracking();
+    window.popupController.stopSleepCountdownUI();
   }
 });
 

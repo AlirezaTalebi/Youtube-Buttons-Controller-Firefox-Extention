@@ -2,6 +2,35 @@
 
 All notable changes to the YouTube Button Controller extension.
 
+## [2.5.0] - 2026-10-16
+
+### Added
+
+- Top YouTube thumbnail overlay media deck with integrated player controls (Play/Pause, Previous, Next, Mute, Volume slider, and live timecode)
+- Modular drag-and-drop reorderable sections with custom order persistence via browser storage
+- Collapsible modular sections with smooth chevron indicators and persistent folded/unfolded states
+- Tri-scale popup layout selector (Small / Medium / Large) accessible directly in the header with persistent zoom scaling
+- Top donation support banner with single toggle button and expandable drawer
+- Multi-cryptocurrency donation support (BNB Smart Chain, Ethereum, Tron, Bitcoin) with one-click clipboard copying, button feedback, and toast alerts
+- Direct PayPal donation link support (`paypal.me/alirezatalebi`)
+- Modern copyright-safe vector SVG icons for all action buttons and status indicators
+- Enhanced YouTube Shorts previous/next navigation support
+- Interactive captions toggle state synchronization and feedback
+
+### Changed
+
+- Adopted official YouTube design system with YouTube Red (`#FF0000`), dark surfaces (`#0F0F0F`, `#1F1F1F`, `#272727`), and light surfaces (`#F9F9F9`, `#FFFFFF`)
+- Enlarged extension toolbar icons with multi-resolution assets (16px, 32px, 48px, 128px) and enlarged popup logo badge
+- Replaced intrusive top notification banner with modern floating status toasts
+- Improved volume slider and control bar responsiveness across small, medium, and wide scales
+- Streamlined top status indicator with connection dot and compact rescan button
+
+### Fixed
+
+- Volume slider and time counter collision / overflow in Small and Medium scale modes
+- Shortcuts modal duplicate stacking and escape key listener cleanup
+- Cached YouTube tab validation and active tab detection reliability
+
 ## [2.4.0] - 2026-05-12
 
 ### Added

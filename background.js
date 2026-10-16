@@ -15,6 +15,13 @@ let autoPauseEnabled = false;
 // Cache for finding YouTube tab when sending commands (separate from auto-pause tracking)
 let cachedYouTubeTabId = null;
 
+// Sleep timer tracking in background so it survives popup close
+let sleepTimerTimeoutId = null;
+let sleepTimerEndTime = null;
+
+// Serialized queue for debug logging to prevent storage race conditions
+let debugLogQueue = Promise.resolve();
+
 // Helper: Check if URL is a YouTube video tab (watch or shorts)
 function isYouTubeVideoUrl(url) {
   return typeof url === 'string' && (
@@ -22,6 +29,13 @@ function isYouTubeVideoUrl(url) {
     url.includes('youtube.com/shorts/')
   );
 }
+
+const YOUTUBE_VIDEO_URL_PATTERNS = [
+  '*://*.youtube.com/watch*',
+  '*://youtube.com/watch*',
+  '*://*.youtube.com/shorts/*',
+  '*://youtube.com/shorts/*'
+];
 
 // Load auto-pause setting on startup
 async function loadAutoPauseSetting() {
@@ -34,6 +48,56 @@ async function loadAutoPauseSetting() {
     console.error('Background: Failed to load autoPauseSetting:', error);
     autoPauseEnabled = false;
     addDebugLog('[Background]', 'error', 'startup', 'failed to load autoPause', { error: error.message });
+  }
+}
+
+// Restore sleep timer on startup if still active
+async function restoreSleepTimer() {
+  try {
+    const { ytControllerSleepTimerEndTime = null } = await browser.storage.local.get('ytControllerSleepTimerEndTime');
+    if (ytControllerSleepTimerEndTime && ytControllerSleepTimerEndTime > Date.now()) {
+      scheduleSleepTimerAt(ytControllerSleepTimerEndTime);
+    } else if (ytControllerSleepTimerEndTime) {
+      await browser.storage.local.remove('ytControllerSleepTimerEndTime');
+    }
+  } catch (error) {
+    console.error('Background: Failed to restore sleep timer:', error);
+  }
+}
+
+function scheduleSleepTimerAt(endTime) {
+  if (sleepTimerTimeoutId) {
+    clearTimeout(sleepTimerTimeoutId);
+    sleepTimerTimeoutId = null;
+  }
+  sleepTimerEndTime = endTime;
+  const remainingMs = Math.max(0, endTime - Date.now());
+
+  sleepTimerTimeoutId = setTimeout(async () => {
+    sleepTimerTimeoutId = null;
+    sleepTimerEndTime = null;
+    try {
+      await browser.storage.local.remove('ytControllerSleepTimerEndTime');
+    } catch (e) {
+      // Ignore storage error
+    }
+    await pauseAllYouTubeTabs();
+  }, remainingMs);
+}
+
+async function pauseAllYouTubeTabs() {
+  try {
+    const tabs = await browser.tabs.query({ url: YOUTUBE_VIDEO_URL_PATTERNS });
+    for (const tab of tabs) {
+      try {
+        await browser.tabs.sendMessage(tab.id, { action: 'pauseIfPlaying' });
+      } catch (e) {
+        // Tab content script may not be loaded
+      }
+    }
+    addDebugLog('[Background]', 'info', 'sleepTimer', 'paused all YouTube tabs on sleep timer expiry', { count: tabs.length });
+  } catch (error) {
+    console.error('Background: Error pausing YouTube tabs for sleep timer:', error);
   }
 }
 
@@ -55,6 +119,7 @@ browser.runtime.onInstalled.addListener(async (details) => {
 // Initialize on startup: load settings and track active tab
 async function initializeOnStartup() {
   await loadAutoPauseSetting();
+  await restoreSleepTimer();
   
   try {
     const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -111,6 +176,14 @@ browser.tabs.onActivated.addListener(async (activeInfo) => {
     const newTab = await browser.tabs.get(activeInfo.tabId);
     currentActiveTabId = newTab.id;
     currentActiveTabUrl = newTab.url || '';
+
+    if (isYouTubeVideoUrl(currentActiveTabUrl)) {
+      cachedYouTubeTabId = newTab.id;
+      browser.runtime.sendMessage({
+        type: 'YOUTUBE_TAB_ACTIVATED',
+        tabId: newTab.id
+      }).catch(() => {});
+    }
     
     console.log('Background: Tab switched:', oldTabId, oldTabUrl, '->', newTab.id, newTab.url);
     addDebugLog('[Background]', 'info', 'tabSwitch', 'tab activation detected', { oldTabId, oldTabUrl, newTabId: newTab.id, newTabUrl: newTab.url });
@@ -172,22 +245,66 @@ async function handleMessage(message, sender, sendResponse) {
   try {
     switch (message.type) {
       case 'GET_ACTIVE_TAB':
-        handleGetActiveTab(sendResponse);
+        await handleGetActiveTab(sendResponse);
         break;
       
       case 'SEND_COMMAND':
-        handleSendCommand(message, sendResponse);
+        await handleSendCommand(message, sendResponse);
         break;
       
       case 'SET_AUTO_PAUSE':
-        handleAutoPauseToggle(message.enabled);
+        await handleAutoPauseToggle(message.enabled);
         sendResponse({ success: true });
         break;
+
+      case 'START_SLEEP_TIMER': {
+        const minutes = Number(message.minutes);
+        if (!Number.isFinite(minutes) || minutes <= 0) {
+          sendResponse({ success: false, error: 'Invalid sleep timer duration' });
+          break;
+        }
+        const endTime = Date.now() + minutes * 60 * 1000;
+        await browser.storage.local.set({ ytControllerSleepTimerEndTime: endTime });
+        scheduleSleepTimerAt(endTime);
+        addDebugLog('[Background]', 'info', 'sleepTimer', 'started', { minutes, endTime });
+        sendResponse({ success: true, endTime });
+        break;
+      }
+
+      case 'CANCEL_SLEEP_TIMER': {
+        if (sleepTimerTimeoutId) {
+          clearTimeout(sleepTimerTimeoutId);
+          sleepTimerTimeoutId = null;
+        }
+        sleepTimerEndTime = null;
+        await browser.storage.local.remove('ytControllerSleepTimerEndTime');
+        addDebugLog('[Background]', 'info', 'sleepTimer', 'cancelled');
+        sendResponse({ success: true });
+        break;
+      }
+
+      case 'GET_SLEEP_TIMER': {
+        const activeEndTime = (sleepTimerEndTime && sleepTimerEndTime > Date.now()) ? sleepTimerEndTime : null;
+        sendResponse({ success: true, endTime: activeEndTime });
+        break;
+      }
       
       case 'BUTTON_STATE_CHANGED':
         // Just acknowledge the state change
         sendResponse({ success: true });
         break;
+
+      case 'GET_DEBUG_LOGS': {
+        const result = await browser.storage.local.get('ytControllerDebugLog');
+        sendResponse({ ytControllerDebugLog: result.ytControllerDebugLog || [] });
+        break;
+      }
+
+      case 'CLEAR_DEBUG_LOGS': {
+        await browser.storage.local.remove('ytControllerDebugLog');
+        sendResponse({ status: 'Logs cleared' });
+        break;
+      }
       
       default:
         sendResponse({ success: false, error: 'Unknown message type' });
@@ -203,28 +320,13 @@ async function getActiveYouTubeTab() {
   try {
     console.log('Background: Attempting to find active YouTube tab...');
     
-    // First check if cached tab is still valid
-    if (cachedYouTubeTabId) {
-      try {
-        const tab = await browser.tabs.get(cachedYouTubeTabId);
-        if (tab && tab.url && tab.url.includes('youtube.com/watch')) {
-          console.log('Background: Using cached YouTube tab:', cachedYouTubeTabId);
-          return cachedYouTubeTabId;
-        }
-      } catch (error) {
-        // Tab no longer exists
-        console.log('Background: Cached tab no longer valid');
-        cachedYouTubeTabId = null;
-      }
-    }
-
     // Strategy 1: Find active tab in current window that is YouTube
     const activeTabs = await browser.tabs.query({ 
       active: true, 
       currentWindow: true
     });
 
-    if (activeTabs.length > 0 && activeTabs[0].url && activeTabs[0].url.includes('youtube.com/watch')) {
+    if (activeTabs.length > 0 && activeTabs[0].url && isYouTubeVideoUrl(activeTabs[0].url)) {
       cachedYouTubeTabId = activeTabs[0].id;
       console.log('Background: Found active YouTube tab:', cachedYouTubeTabId);
       try {
@@ -235,9 +337,24 @@ async function getActiveYouTubeTab() {
       return cachedYouTubeTabId;
     }
 
-    // Strategy 2: Find all YouTube tabs matching patterns
+    // Strategy 2: Check if cached tab is still valid
+    if (cachedYouTubeTabId) {
+      try {
+        const tab = await browser.tabs.get(cachedYouTubeTabId);
+        if (tab && tab.url && isYouTubeVideoUrl(tab.url)) {
+          console.log('Background: Using cached YouTube tab:', cachedYouTubeTabId);
+          return cachedYouTubeTabId;
+        }
+      } catch (error) {
+        // Tab no longer exists
+        console.log('Background: Cached tab no longer valid');
+        cachedYouTubeTabId = null;
+      }
+    }
+
+    // Strategy 3: Find all YouTube tabs matching patterns (including Shorts)
     const allYoutubeTabs = await browser.tabs.query({
-      url: ['*://*.youtube.com/watch*', '*://youtube.com/watch*']
+      url: YOUTUBE_VIDEO_URL_PATTERNS
     });
 
     console.log('Background: Found', allYoutubeTabs.length, 'YouTube tabs');
@@ -342,38 +459,25 @@ async function handleAutoPauseToggle(enabled) {
   }
 }
 
-// Debug logging helper for background script
-async function addDebugLog(scope, level, action, message, data = {}) {
-  try {
-    const { ytControllerDebugLog = [] } = await browser.storage.local.get('ytControllerDebugLog');
-    const logs = Array.isArray(ytControllerDebugLog) ? ytControllerDebugLog : [];
-    logs.push({ time: new Date().toISOString(), scope, level, action, message, data });
-    if (logs.length > 150) logs.shift();
-    await browser.storage.local.set({ ytControllerDebugLog: logs });
-  } catch (e) {
-    console.error('[DebugLog] Storage error:', e);
-  }
+// Debug logging helper for background script (serialized to prevent concurrent write races)
+function addDebugLog(scope, level, action, message, data = {}) {
+  debugLogQueue = debugLogQueue.then(async () => {
+    try {
+      const { ytControllerDebugLog = [] } = await browser.storage.local.get('ytControllerDebugLog');
+      const logs = Array.isArray(ytControllerDebugLog) ? ytControllerDebugLog : [];
+      logs.push({ time: new Date().toISOString(), scope, level, action, message, data });
+      while (logs.length > 150) logs.shift();
+      await browser.storage.local.set({ ytControllerDebugLog: logs });
+    } catch (e) {
+      console.error('[DebugLog] Storage error:', e);
+    }
+  });
+  return debugLogQueue;
 }
 
 // Clear cache when tabs are closed
 browser.tabs.onRemoved.addListener((tabId) => {
   if (tabId === cachedYouTubeTabId) {
     cachedYouTubeTabId = null;
-  }
-});
-
-// Global debug helper - access from extension console: await browser.runtime.sendMessage({type: 'GET_DEBUG_LOGS'})
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'GET_DEBUG_LOGS') {
-    browser.storage.local.get('ytControllerDebugLog').then(result => {
-      sendResponse({ ytControllerDebugLog: result.ytControllerDebugLog || [] });
-    });
-    return true;
-  }
-  if (message.type === 'CLEAR_DEBUG_LOGS') {
-    browser.storage.local.remove('ytControllerDebugLog').then(() => {
-      sendResponse({ status: 'Logs cleared' });
-    });
-    return true;
   }
 });

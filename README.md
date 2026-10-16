@@ -7,24 +7,26 @@ Firefox extension for controlling YouTube playback from the popup and keyboard s
 
 ## Current Version
 
-2.4.0
+2.5.0
 
 ## Features
 
-- Current Video card with real YouTube thumbnail
-- Live seekable progress bar
-- Play/Pause
-- Previous/Next
-- Mute
-- Speed controls
-- Volume controls
+- Top YouTube thumbnail overlay player with quick controls (Play/Pause, Prev, Next, Mute, Volume, Timecode)
+- Live seekable progress bar with instant seekTo support
+- Modular reorderable sections with drag-and-drop handles & persistence
+- Collapsible modular sections with chevron indicators
+- Tri-scale popup layout presets (Small / Medium / Large)
+- Modern YouTube Red design system and copyright-safe vector SVG icons
+- Floating toast status notifications
+- Top donation support banner with expandable PayPal & Cryptos (BNB, ETH, TRX, BTC)
+- Speed controls (0.25x - 2.0x, presets, +/- increments)
+- Volume controls & mute toggle
 - Auto-pause on tab switch
-- Settings Profiles
+- Settings Profiles (channel-specific & global presets)
 - Watch History + Resume
-- Popup Size presets
-- Light/Dark theme
-- Help section
-- Debug logs
+- Light / Dark theme toggle
+- Help section & keyboard shortcuts modal
+- Debug logs drawer
 
 ## Removed
 

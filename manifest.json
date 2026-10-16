@@ -1,7 +1,7 @@
-﻿{
+{
   "manifest_version": 3,
   "name": "YouTube Button Controller",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Enhanced YouTube controller with keyboard shortcuts, volume control, speed adjustment, and advanced features",
   "author": "Alireza Talebi",
   "homepage_url": "https://github.com/AlirezaTalebi/Youtube-Buttons-Controller-Firefox-Extention",
@@ -40,7 +40,13 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_icon": "images/youtube.png"
+    "default_icon": {
+      "16": "images/icon-16.png",
+      "32": "images/icon-32.png",
+      "48": "images/icon-48.png",
+      "96": "images/icon.svg",
+      "128": "images/youtube.png"
+    }
   },
   "commands": {
     "play-pause": {
@@ -117,6 +123,10 @@
     }
   },
   "icons": {
-    "48": "images/youtube.png"
+    "16": "images/icon-16.png",
+    "32": "images/icon-32.png",
+    "48": "images/icon-48.png",
+    "96": "images/icon.svg",
+    "128": "images/youtube.png"
   }
 }
