@@ -7,7 +7,7 @@
   "homepage_url": "https://github.com/AlirezaTalebi/Youtube-Buttons-Controller-Firefox-Extention",
   "browser_specific_settings": {
     "gecko": {
-      "id": "youtube-button-controller@alirezatalebi",
+      "id": "{bdeebc30-5928-43be-936c-0bfcaac4f06a}",
       "data_collection_permissions": {
         "required": ["none"]
       }
